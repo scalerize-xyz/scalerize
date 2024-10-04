@@ -6,7 +6,9 @@ import (
 
 type ABCIHandler interface {
 	PrepareProposal() sdk.PrepareProposalHandler
-	// ProcessProposal() sdk.ProcessProposalHandler
+	ProcessProposal() sdk.ProcessProposalHandler
+	PreBlock() sdk.PreBlocker
+	EndBlock() sdk.EndBlocker
 	// ExtendVote() sdk.ExtendVoteHandler
 	// VerifyVoteExtension() sdk.VerifyVoteExtensionHandler
 	// BeginBlocker() sdk.BeginBlocker

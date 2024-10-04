@@ -4,6 +4,8 @@ import (
 	_ "embed"
 	"io"
 
+	"github.com/aerius-labs/scalerize/abci"
+	"github.com/aerius-labs/scalerize/execution/evm"
 	dbm "github.com/cosmos/cosmos-db"
 
 	"cosmossdk.io/core/appconfig"
@@ -21,6 +23,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server/api"
 	"github.com/cosmos/cosmos-sdk/server/config"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
+	"github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
@@ -132,13 +135,14 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
-	// evmABCIHandler := evm.NewEVMABCIHandler()
-	// abciHandler := abci.NewScalerizeABCIHandler(evmABCIHandler)
+	evmABCIHandler := evm.NewEVMABCIHandler()
+	abciHandler := abci.NewScalerizeABCIHandler(evmABCIHandler)
 	baseAppOptions = append(baseAppOptions, func(ba *baseapp.BaseApp) {
-		// ba.SetPrepareProposal(abciHandler.PrepareProposal())
-		// ba.SetProcessProposal(abciHandler.ProcessProposal())
-		// ba.SetPreBlocker(abciHandler.PreBlocker())
-		// ba.SetEndBlocker(abciHandler.EndBlocker())
+		ba.SetPrepareProposal(abciHandler.PrepareProposal())
+		ba.SetProcessProposal(abciHandler.ProcessProposal())
+		ba.SetPreBlocker(abciHandler.PreBlock())
+		ba.SetEndBlocker(abciHandler.EndBlock())
+		ba.SetMempool(mempool.NoOpMempool{})
 		// ba.SetBeginBlocker(abciHandler.BeginBlocker())
 		// ba.SetExtendVoteHandler(abciHandler.ExtendVote())
 		// ba.SetVerifyVoteExtensionHandler(abciHandler.VerifyVoteExtension())
