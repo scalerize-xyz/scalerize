@@ -132,6 +132,18 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
+	// evmABCIHandler := evm.NewEVMABCIHandler()
+	// abciHandler := abci.NewScalerizeABCIHandler(evmABCIHandler)
+	baseAppOptions = append(baseAppOptions, func(ba *baseapp.BaseApp) {
+		// ba.SetPrepareProposal(abciHandler.PrepareProposal())
+		// ba.SetProcessProposal(abciHandler.ProcessProposal())
+		// ba.SetPreBlocker(abciHandler.PreBlocker())
+		// ba.SetEndBlocker(abciHandler.EndBlocker())
+		// ba.SetBeginBlocker(abciHandler.BeginBlocker())
+		// ba.SetExtendVoteHandler(abciHandler.ExtendVote())
+		// ba.SetVerifyVoteExtensionHandler(abciHandler.VerifyVoteExtension())
+	})
+
 	app.App = appBuilder.Build(db, traceStore, baseAppOptions...)
 
 	// register streaming services
