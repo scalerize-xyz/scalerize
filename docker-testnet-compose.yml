@@ -1,0 +1,83 @@
+version: "3"
+
+services:
+  scalerizednode0:
+    container_name: scalerizednode0
+    image: "scalerized/node"
+    ports:
+      - "26657:26657"
+      - "8545:8545"
+      - "8546:8546"
+      - "8125:8125"
+    environment:
+      - ID=0
+      - LOG=${LOG:-scalerized.log}
+    volumes:
+      - ./localnet-setup/node0/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.2
+
+    entrypoint: "bash start-testnet-node.sh"
+
+  scalerizednode1:
+    container_name: scalerizednode1
+    image: "scalerized/node"
+    ports:
+      - "26658:26657"
+      - "8555:8545"
+      - "8556:8546"
+      - "8126:8125"
+    environment:
+      - ID=1
+      - LOG=${LOG:-scalerized.log}
+    volumes:
+      - ./localnet-setup/node1/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.3
+
+    entrypoint: "bash start-testnet-node.sh"
+
+  scalerizednode2:
+    container_name: scalerizednode2
+    image: "scalerized/node"
+    environment:
+      - ID=2
+      - LOG=${LOG:-scalerized.log}
+    ports:
+      - "26659:26657"
+      - "8565:8545"
+      - "8566:8546"
+      - "8127:8125"
+    volumes:
+      - ./localnet-setup/node2/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.4
+    entrypoint: "bash start-testnet-node.sh"
+
+  scalerizednode3:
+    container_name: scalerizednode3
+    image: "scalerized/node"
+    environment:
+      - ID=3
+      - LOG=${LOG:-scalerized.log}
+    ports:
+      - "26660:26657"
+      - "8575:8545"
+      - "8576:8546"
+      - "8128:8125"
+    volumes:
+      - ./localnet-setup/node3/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.5
+    entrypoint: "bash start-testnet-node.sh"
+
+networks:
+  scalerize-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

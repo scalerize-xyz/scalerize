@@ -1,3 +1,8 @@
+STARTING-IP-ADDR := 172.20.0.2 
+NODES := 4
+SCALERIZED_CONTAINER_DIR := /go/src/github.com/aerius-labs/scalerize/build/scalerized
+BUILDDIR ?= $(CURDIR)/build
+
 include scripts/execution-client.mk
 
 
@@ -25,13 +30,32 @@ BUILD_FLAGS := -ldflags '$(ldflags)'
 # Install #
 ###########
 
-all: install
+.PHONY: build install
+
+BUILD_TARGETS := build
 
 install:
 	@echo "--> ensure dependencies have not been modified"
 	@go mod verify
-	@echo "--> installing scalerized"
-	@go install $(BUILD_FLAGS) -mod=readonly ./cmd/scalerized
+	@echo "--> building scalerized"
+	@go build install $(BUILD_FLAGS) -mod=readonly ./cmd/scalerized 
 
+
+BUILD_TARGETS := build
+
+build: BUILD_ARGS=-o $(BUILDDIR)/
+build-linux:
+	GOOS=linux GOARCH=amd64 LEDGER_ENABLED=false $(MAKE) build
+
+$(BUILD_TARGETS): go.sum $(BUILDDIR)/
+	go $@ $(BUILD_FLAGS) $(BUILD_ARGS) ./...
+
+$(BUILDDIR)/:
+	mkdir -p $(BUILDDIR)/
+	
 init:
 	./scripts/init.sh
+
+localtestnet-example-config: 
+	$(SCALERIZED_CONTAINER_DIR) testnet init-files --output-dir example-testnet --v $(NODES) --starting-ip-address $(STARTING-IP-ADDR) --keyring-backend test
+
