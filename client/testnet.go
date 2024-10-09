@@ -1,21 +1,4 @@
-// Copyright 2021 Evmos Foundation
-// This file is part of Evmos' Ethermint library.
-//
-// The Ethermint library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The Ethermint library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the Ethermint library. If not, see https://github.com/evmos/ethermint/blob/main/LICENSE
 package client
-
-// DONTCOVER
 
 import (
 	"bufio"
@@ -33,7 +16,6 @@ import (
 	"github.com/cometbft/cometbft/types"
 	cmttime "github.com/cometbft/cometbft/types/time"
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
-	"github.com/cosmos/cosmos-sdk/server/config"
 	"github.com/cosmos/cosmos-sdk/testutil/network"
 	"github.com/spf13/cobra"
 
@@ -215,7 +197,7 @@ Example:
 	cmd.Flags().Bool(flagEnableLogging, false, "Enable INFO logging of tendermint validator nodes")
 	cmd.Flags().String(flagRPCAddress, "tcp://0.0.0.0:26657", "the RPC address to listen on")
 	cmd.Flags().String(flagAPIAddress, "tcp://0.0.0.0:1317", "the address to listen on for REST API")
-	cmd.Flags().String(flagGRPCAddress, config.DefaultGRPCAddress, "the gRPC server address to listen on")
+	cmd.Flags().String(flagGRPCAddress, srvconfig.DefaultGRPCAddress, "the gRPC server address to listen on")
 	// cmd.Flags().String(flagJSONRPCAddress, config.DefaultJSONRPCAddress, "the JSON-RPC server address to listen on")
 	cmd.Flags().Bool(flagPrintMnemonic, true, "print mnemonic of first validator to stdout for manual testing")
 	return cmd
@@ -240,7 +222,7 @@ func initTestnetFiles(
 	nodeIDs := make([]string, args.numValidators)
 	valPubKeys := make([]cryptotypes.PubKey, args.numValidators)
 
-	appConfig := config.DefaultConfig()
+	appConfig := srvconfig.DefaultConfig()
 	appConfig.MinGasPrices = args.minGasPrices
 	appConfig.API.Enable = true
 	appConfig.Telemetry.Enabled = true
@@ -343,10 +325,14 @@ func initTestnetFiles(
 		genBalances = append(genBalances, banktypes.Balance{Address: addr.String(), Coins: coins.Sort()})
 		genAccounts = append(genAccounts, authtypes.NewBaseAccount(addr, nil, 0, 0))
 
+		valStr, err := valAddrCodec.BytesToString(sdk.ValAddress(addr))
+		if err != nil {
+			return err
+		}
+
 		valTokens := sdk.TokensFromConsensusPower(100, PowerReduction)
 		createValMsg, err := stakingtypes.NewMsgCreateValidator(
-			// sdk.ValAddress(addr),
-			addr.String(),
+			valStr,
 			valPubKeys[i],
 			sdk.NewCoin(params.CoinUnit, valTokens),
 			stakingtypes.NewDescription(nodeDirName, "", "", "", ""),
