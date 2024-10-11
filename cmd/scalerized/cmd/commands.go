@@ -12,7 +12,9 @@ import (
 	confixcmd "cosmossdk.io/tools/confix/cmd"
 
 	"github.com/aerius-labs/scalerize/app"
+	"github.com/aerius-labs/scalerize/app/params"
 	sclient "github.com/aerius-labs/scalerize/client"
+	"github.com/aerius-labs/scalerize/execution/evm"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/debug"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -41,7 +43,10 @@ func initRootCmd(rootCmd *cobra.Command, txConfig client.TxConfig, basicManager 
 		snapshot.Cmd(newApp),
 	)
 
-	server.AddCommands(rootCmd, app.DefaultNodeHome, newApp, appExport, func(startCmd *cobra.Command) {})
+	server.AddCommands(rootCmd, app.DefaultNodeHome, newApp, appExport, func(startCmd *cobra.Command) {
+		startCmd.PersistentFlags().String(params.FlagExecutionClientType, evm.EVM, "type of execution engine: evm, svm etc.")
+		startCmd.PersistentFlags().String(params.FlagExecutionClientURL, "http://localhost:8551", "url on which the ethereum engine api is available")
+	})
 
 	// add keybase, auxiliary RPC, query, genesis, and tx child commands
 	rootCmd.AddCommand(

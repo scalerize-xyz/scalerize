@@ -5,6 +5,6 @@ cp -r ./example-testnet/node$ID/scalerized /root/.scalerized
 
 # Start the scalerized node
 echo "starting scalerize node $ID in background ..."
-scalerized start
+scalerized start --execution-client-type=evm --execution-client-url=$ENGINE_API
 
 tail -f /dev/null

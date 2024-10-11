@@ -2,11 +2,16 @@ package app
 
 import (
 	_ "embed"
+	"fmt"
 	"io"
+
+	"context"
 
 	"github.com/aerius-labs/scalerize/abci"
 	"github.com/aerius-labs/scalerize/execution/evm"
 	dbm "github.com/cosmos/cosmos-db"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"cosmossdk.io/core/appconfig"
 	"cosmossdk.io/depinject"
@@ -34,7 +39,8 @@ import (
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 
 	appv1alpha1 "cosmossdk.io/api/cosmos/app/v1alpha1"
-	_ "cosmossdk.io/api/cosmos/tx/config/v1"          // import for side-effects
+	_ "cosmossdk.io/api/cosmos/tx/config/v1" // import for side-effects
+	"github.com/aerius-labs/scalerize/app/params"
 	_ "github.com/cosmos/cosmos-sdk/x/auth"           // import for side-effects
 	_ "github.com/cosmos/cosmos-sdk/x/auth/tx/config" // import for side-effects
 	_ "github.com/cosmos/cosmos-sdk/x/bank"           // import for side-effects
@@ -108,10 +114,28 @@ func NewScalerizeApp(
 	appOpts servertypes.AppOptions,
 	baseAppOptions ...func(*baseapp.BaseApp),
 ) (*ScalerizeApp, error) {
+	fmt.Println("HERE")
 	var (
 		app        = &ScalerizeApp{}
 		appBuilder *runtime.AppBuilder
 	)
+
+	url := appOpts.Get(params.FlagExecutionClientURL).(string)
+	fmt.Println("Engine API URL: ", url)
+
+	clientType := appOpts.Get(params.FlagExecutionClientType).(string)
+	fmt.Println("Execution client type: ", clientType)
+
+	ctx := context.Background()
+	rpcClient, err := rpc.DialContext(
+		ctx, url,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	_ = ethclient.NewClient(rpcClient)
 
 	if err := depinject.Inject(
 		depinject.Configs(

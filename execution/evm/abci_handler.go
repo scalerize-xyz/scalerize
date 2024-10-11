@@ -36,8 +36,7 @@ func (h *ABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 				"withdrawals": [],
 				"blobGasUsed": "0x0",
 				"excessBlobGas": "0x0"
-				},
-		}`
+			}`
 
 		return &abci.ResponsePrepareProposal{
 			Txs: [][]byte{[]byte(prepareProposalMockResponse)},

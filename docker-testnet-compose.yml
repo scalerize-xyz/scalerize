@@ -6,12 +6,13 @@ services:
     image: "scalerized/node"
     ports:
       - "26657:26657"
-      - "8545:8545"
-      - "8546:8546"
+      - "8544:8545"
+      - "8543:8546"
       - "8125:8125"
     environment:
       - ID=0
       - LOG=${LOG:-scalerized.log}
+      - ENGINE_API=http://172.0.0.6:8551
     volumes:
       - ./localnet-setup/node0/scalerized:/scalerize:Z
     networks:
@@ -31,6 +32,8 @@ services:
     environment:
       - ID=1
       - LOG=${LOG:-scalerized.log}
+      - ENGINE_API=http://172.0.0.7:8552
+
     volumes:
       - ./localnet-setup/node1/scalerized:/scalerize:Z
     networks:
@@ -45,6 +48,8 @@ services:
     environment:
       - ID=2
       - LOG=${LOG:-scalerized.log}
+      - ENGINE_API=http://172.0.0.8:8553
+
     ports:
       - "26659:26657"
       - "8565:8545"
@@ -63,6 +68,8 @@ services:
     environment:
       - ID=3
       - LOG=${LOG:-scalerized.log}
+      - ENGINE_API=http://172.0.0.9:8554
+
     ports:
       - "26660:26657"
       - "8575:8545"
@@ -74,6 +81,76 @@ services:
       scalerize-net:
         ipv4_address: 172.20.0.5
     entrypoint: "bash start-testnet-node.sh"
+
+  rethnode0:
+    container_name: rethnode0
+    image: "reth/node"
+    environment:
+      - PEER_RPC_URLS=http://172.20.0.7:8545,http://172.20.0.8:8545,http://172.20.0.9:8545
+    ports:
+      - "8551:8551"
+      - "8545:8545"
+      - "30303:30303"
+    env_file: "reth.env"
+    volumes:
+      - ./localnet-setup/node0/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.6
+    entrypoint: "bash start-testnet-reth.sh"
+
+  rethnode1:
+    container_name: rethnode1
+    image: "reth/node"
+    environment:
+      - PEER_RPC_URLS=http://172.20.0.6:8545,http://172.20.0.8:8545,http://172.20.0.9:8545
+    ports:
+      - "8552:8551"
+      - "8546:8545"
+      - "30304:30303"
+    env_file: "reth.env"
+    volumes:
+      - ./localnet-setup/node0/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.7
+    entrypoint: "bash start-testnet-reth.sh"
+
+  rethnode2:
+    container_name: rethnode2
+    image: "reth/node"
+    environment:
+      - TRUSTED_PEERS=enode://172.20.0.6:30303,enode://172.20.0.7:30304,enode://172.20.0.9:30306
+      - PEER_RPC_URLS=http://172.20.0.6:8545,http://172.20.0.7:8545,http://172.20.0.9:8545
+    ports:
+      - "8553:8551"
+      - "8547:8545"
+      - "30305:30303"
+    env_file: "reth.env"
+    volumes:
+      - ./localnet-setup/node0/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.8
+    entrypoint: "bash start-testnet-reth.sh"
+
+  rethnode3:
+    container_name: rethnode3
+    image: "reth/node"
+    environment:
+      - TRUSTED_PEERS=enode://172.20.0.6:30303,enode://172.20.0.7:30304,enode://172.20.0.8:30305
+      - PEER_RPC_URLS=http://172.20.0.6:8545,http://172.20.0.7:8545,http://172.20.0.8:8545
+    ports:
+      - "8554:8551"
+      - "8548:8545"
+      - "30306:30303"
+    env_file: "reth.env"
+    volumes:
+      - ./localnet-setup/node0/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.9
+    entrypoint: "bash start-testnet-reth.sh"
 
 networks:
   scalerize-net:
