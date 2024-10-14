@@ -97,7 +97,7 @@ services:
     networks:
       scalerize-net:
         ipv4_address: 172.20.0.6
-    entrypoint: "bash start-testnet-reth.sh"
+    entrypoint: ["/bin/sh", "-c", "bash start-testnet-reth.sh & bash add-reth-peers.sh && tail -f /dev/null"]
 
   rethnode1:
     container_name: rethnode1
@@ -114,13 +114,13 @@ services:
     networks:
       scalerize-net:
         ipv4_address: 172.20.0.7
-    entrypoint: "bash start-testnet-reth.sh"
+    entrypoint: ["/bin/sh", "-c", "bash start-testnet-reth.sh & bash add-reth-peers.sh && tail -f /dev/null"]
+
 
   rethnode2:
     container_name: rethnode2
     image: "reth/node"
     environment:
-      - TRUSTED_PEERS=enode://172.20.0.6:30303,enode://172.20.0.7:30304,enode://172.20.0.9:30306
       - PEER_RPC_URLS=http://172.20.0.6:8545,http://172.20.0.7:8545,http://172.20.0.9:8545
     ports:
       - "8553:8551"
@@ -132,13 +132,13 @@ services:
     networks:
       scalerize-net:
         ipv4_address: 172.20.0.8
-    entrypoint: "bash start-testnet-reth.sh"
+    entrypoint: ["/bin/sh", "-c", "bash start-testnet-reth.sh & bash add-reth-peers.sh && tail -f /dev/null"]
+
 
   rethnode3:
     container_name: rethnode3
     image: "reth/node"
     environment:
-      - TRUSTED_PEERS=enode://172.20.0.6:30303,enode://172.20.0.7:30304,enode://172.20.0.8:30305
       - PEER_RPC_URLS=http://172.20.0.6:8545,http://172.20.0.7:8545,http://172.20.0.8:8545
     ports:
       - "8554:8551"
@@ -150,7 +150,7 @@ services:
     networks:
       scalerize-net:
         ipv4_address: 172.20.0.9
-    entrypoint: "bash start-testnet-reth.sh"
+    entrypoint: ["/bin/sh", "-c", "bash start-testnet-reth.sh & bash add-reth-peers.sh && tail -f /dev/null"]
 
 networks:
   scalerize-net:
