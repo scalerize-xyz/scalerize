@@ -6,12 +6,12 @@ import (
 )
 
 type ABCIHandler struct {
-	client EVMClient
+	client *EVMClient
 }
 
-func NewEVMABCIHandler() *ABCIHandler {
+func NewEVMABCIHandler(client *EVMClient) *ABCIHandler {
 	return &ABCIHandler{
-		// client: client,
+		client: client,
 	}
 }
 
@@ -46,6 +46,7 @@ func (h *ABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 
 func (h *ABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
+		// tx := req.Txs
 		return nil, nil
 	}
 }

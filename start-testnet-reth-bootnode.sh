@@ -8,6 +8,7 @@ reth node \
     --chain $ETH_GENESIS_PATH \
     --http \
     --http.addr '0.0.0.0' \
+    --discovery.port 30303 \
     --http.api admin,debug,eth,net,trace,txpool,web3,rpc,reth,ots \
     --authrpc.addr '0.0.0.0' \
     --authrpc.jwtsecret $JWT_PATH \

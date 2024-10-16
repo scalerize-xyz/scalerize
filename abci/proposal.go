@@ -16,12 +16,12 @@ type ABCIHandler interface {
 }
 
 type ScalerizeABCIHandler struct {
-	ABCIHandler
+	// ABCIHandler
 }
 
 func NewScalerizeABCIHandler(h ABCIHandler) *ScalerizeABCIHandler {
 	return &ScalerizeABCIHandler{
-		ABCIHandler: h,
+		// ABCIHandler: h,
 	}
 }
 
