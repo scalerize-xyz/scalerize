@@ -48,4 +48,3 @@ reth node \
     --authrpc.jwtsecret $JWT_PATH \
     --datadir $ETH_DATA_DIR \
     --trusted-peers $enode_url \
-    --dev

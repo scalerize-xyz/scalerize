@@ -19,7 +19,6 @@ start-reth: ## start an ephemeral `reth` node
 	--authrpc.addr "0.0.0.0" \
 	--authrpc.jwtsecret $(JWT_PATH) \
 	--datadir ${ETH_DATA_DIR} \
-	--dev
 
 start-reth-host: ## start a local ephemeral `reth` node on host machine
 	rm -rf ${ETH_DATA_DIR}
@@ -31,5 +30,4 @@ start-reth-host: ## start a local ephemeral `reth` node on host machine
 	--http.api admin,debug,eth,net,trace,txpool,web3,rpc,reth,ots \
 	--authrpc.addr "0.0.0.0" \
 	--authrpc.jwtsecret $(JWT_PATH) \
-	--datadir ${ETH_DATA_DIR} \
-	--dev
+	--datadir ${ETH_DATA_DIR}

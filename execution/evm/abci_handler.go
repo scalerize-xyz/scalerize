@@ -1,6 +1,8 @@
 package evm
 
 import (
+	"fmt"
+
 	abci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
@@ -17,6 +19,7 @@ func NewEVMABCIHandler(client *EVMClient) *ABCIHandler {
 
 func (h *ABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
+		fmt.Println("PREPARE PROPOSAL CALLED")
 		prepareProposalMockResponse := `
 			{
 				"parentHash": "0x1ecdf28cea1886cee4b560ae85bc5e41f675646f6e7d21c6b8214fdf917da360",
@@ -46,14 +49,18 @@ func (h *ABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 
 func (h *ABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
-		// tx := req.Txs
-		return nil, nil
+		fmt.Printf("Process Proposal Request: %+v\n", req)
+		return &abci.ResponseProcessProposal{
+			Status: abci.ResponseProcessProposal_ACCEPT,
+		}, nil
 	}
 }
 
 func (h *ABCIHandler) PreBlock() sdk.PreBlocker {
 	return func(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
-		return nil, nil
+		return &sdk.ResponsePreBlock{
+			ConsensusParamsChanged: false,
+		}, nil
 	}
 }
 

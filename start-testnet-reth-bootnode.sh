@@ -13,4 +13,3 @@ reth node \
     --authrpc.addr '0.0.0.0' \
     --authrpc.jwtsecret $JWT_PATH \
     --datadir $ETH_DATA_DIR \
-    --dev
