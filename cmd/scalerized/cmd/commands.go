@@ -44,8 +44,12 @@ func initRootCmd(rootCmd *cobra.Command, txConfig client.TxConfig, basicManager 
 	)
 
 	server.AddCommands(rootCmd, app.DefaultNodeHome, newApp, appExport, func(startCmd *cobra.Command) {
-		startCmd.PersistentFlags().String(params.FlagExecutionClientType, evm.EVM, "type of execution engine: evm, svm etc.")
-		startCmd.PersistentFlags().String(params.FlagExecutionClientURL, "http://localhost:8551", "url on which the ethereum engine api is available")
+		startCmd.PersistentFlags().String(params.FlagExecutionClientType, evm.EVM, "Specifies the execution client type (e.g., EVM, SVM, etc.)")
+		startCmd.PersistentFlags().String(params.FlagExecutionEngineURL, evm.DefaultEngineAPIURL, "URL for the Ethereum execution engine API")
+		startCmd.PersistentFlags().String(params.FlagRPCURL, evm.DefaultRPCURL, "URL for Ethereum RPC calls")
+		startCmd.PersistentFlags().String(params.FlagExecutionEngineJWTSecretPath, evm.DefaultJWTSecretPath, "Path to a JWT secret to use for the authenticated engine-API RPC server")
+		startCmd.PersistentFlags().String(params.FlagRPCJWTRefreshInterval, evm.DefaultRPCJWTRefreshInterval.String(), "Ethereum execution engine API jwt refresh interval")
+		startCmd.PersistentFlags().String(params.FlagRPCCheckInterval, evm.DefaultRPCCheckInterval.String(), "Ethereum RPC server startup check interval")
 	})
 
 	// add keybase, auxiliary RPC, query, genesis, and tx child commands

@@ -5,12 +5,11 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/aerius-labs/scalerize/abci"
 	"github.com/aerius-labs/scalerize/execution/evm"
 	dbm "github.com/cosmos/cosmos-db"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/rpc"
 
 	"cosmossdk.io/core/appconfig"
 	"cosmossdk.io/depinject"
@@ -113,30 +112,13 @@ func NewScalerizeApp(
 	appOpts servertypes.AppOptions,
 	baseAppOptions ...func(*baseapp.BaseApp),
 ) (*ScalerizeApp, error) {
-	var abciHandler abci.ABCIHandler
 
-	fmt.Println("HERE")
 	var (
-		app        = &ScalerizeApp{}
-		appBuilder *runtime.AppBuilder
+		app         = &ScalerizeApp{}
+		appBuilder  *runtime.AppBuilder
+		abciHandler abci.ABCIHandler
+		ctx         = context.Background()
 	)
-
-	// url := appOpts.Get(params.FlagExecutionClientURL).(string)
-	// fmt.Println("Engine API URL: ", url)
-
-	// clientType := appOpts.Get(params.FlagExecutionClientType).(string)
-	// fmt.Println("Execution client type: ", clientType)
-
-	// ctx := context.Background()
-	// rpcClient, err := rpc.DialContext(
-	// 	ctx, url,
-	// )
-
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// c := ethclient.NewClient(rpcClient)
 
 	if err := depinject.Inject(
 		depinject.Configs(
@@ -163,23 +145,43 @@ func NewScalerizeApp(
 	clientType := appOpts.Get(params.FlagExecutionClientType).(string)
 	switch clientType {
 	case evm.EVM:
-		url := appOpts.Get(params.FlagExecutionClientURL).(string)
-		ctx := context.Background()
-		rpcClient, err := rpc.DialContext(
-			ctx, url,
-		)
+		engineAPIURL := appOpts.Get(params.FlagExecutionEngineURL).(string)
+		rpcURL := appOpts.Get(params.FlagRPCURL).(string)
+		jwtSecretPath := appOpts.Get(params.FlagExecutionEngineJWTSecretPath).(string)
+		rpcJWTRefreshInterval, err := time.ParseDuration(appOpts.Get(params.FlagRPCJWTRefreshInterval).(string))
 		if err != nil {
 			return nil, err
 		}
 
-		evmClient := evm.NewClient(ethclient.NewClient(rpcClient))
-		abciHandler = evm.NewEVMABCIHandler(evmClient)
+		rpcCheckInterval, err := time.ParseDuration(appOpts.Get(params.FlagRPCCheckInterval).(string))
+		if err != nil {
+			return nil, err
+		}
+
+		evmConfig, err := evm.NewEVMConfig(rpcJWTRefreshInterval, rpcCheckInterval, engineAPIURL, rpcURL, jwtSecretPath)
+		if err != nil {
+			return nil, err
+		}
+
+		evmClient, err := evm.NewEVMClient(ctx, evmConfig, logger)
+		if err != nil {
+			return nil, err
+		}
+
+		go func() {
+			if err := evmClient.Start(ctx); err != nil {
+				panic(err)
+			}
+		}()
+
+		if abciHandler, err = evm.NewEVMABCIHandler(evmClient); err != nil {
+			app.Logger().Error("failed to create EVM ABCI Handler")
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("invalid execution client type")
 	}
 
-	// evmABCIHandler := evm.NewEVMABCIHandler()
-	// abciHandler := abci.NewScalerizeABCIHandler(evmABCIHandler)
 	baseAppOptions = append(baseAppOptions, func(ba *baseapp.BaseApp) {
 		ba.SetPrepareProposal(abciHandler.PrepareProposal())
 		ba.SetProcessProposal(abciHandler.ProcessProposal())

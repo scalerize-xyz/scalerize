@@ -7,19 +7,20 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-type ABCIHandler struct {
+type EVMABCIHandler struct {
 	client *EVMClient
 }
 
-func NewEVMABCIHandler(client *EVMClient) *ABCIHandler {
-	return &ABCIHandler{
-		client: client,
-	}
+func NewEVMABCIHandler(evmClient *EVMClient) (*EVMABCIHandler, error) {
+	return &EVMABCIHandler{
+		client: evmClient,
+	}, nil
 }
 
-func (h *ABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
+func (h *EVMABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
 		fmt.Println("PREPARE PROPOSAL CALLED")
+
 		prepareProposalMockResponse := `
 			{
 				"parentHash": "0x1ecdf28cea1886cee4b560ae85bc5e41f675646f6e7d21c6b8214fdf917da360",
@@ -47,7 +48,7 @@ func (h *ABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 	}
 }
 
-func (h *ABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
+func (h *EVMABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
 		fmt.Printf("Process Proposal Request: %+v\n", req)
 		return &abci.ResponseProcessProposal{
@@ -56,7 +57,7 @@ func (h *ABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 	}
 }
 
-func (h *ABCIHandler) PreBlock() sdk.PreBlocker {
+func (h *EVMABCIHandler) PreBlock() sdk.PreBlocker {
 	return func(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
 		return &sdk.ResponsePreBlock{
 			ConsensusParamsChanged: false,
@@ -64,7 +65,7 @@ func (h *ABCIHandler) PreBlock() sdk.PreBlocker {
 	}
 }
 
-func (h *ABCIHandler) EndBlock() sdk.EndBlocker {
+func (h *EVMABCIHandler) EndBlock() sdk.EndBlocker {
 	return func(ctx sdk.Context) (sdk.EndBlock, error) {
 		return sdk.EndBlock{}, nil
 	}

@@ -22,10 +22,13 @@ require (
 	cosmossdk.io/math v1.3.0
 	cosmossdk.io/store v1.1.1
 	cosmossdk.io/tools/confix v0.1.2
+	github.com/cockroachdb/errors v1.11.3
 	github.com/cometbft/cometbft v0.38.12
 	github.com/cosmos/cosmos-db v1.0.2
 	github.com/cosmos/cosmos-sdk v0.50.10
 	github.com/ethereum/go-ethereum v1.14.11
+	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/spf13/afero v1.11.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
 )
@@ -48,7 +51,6 @@ require (
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cockroachdb/apd/v2 v2.0.2 // indirect
-	github.com/cockroachdb/errors v1.11.3 // indirect
 	github.com/cockroachdb/fifo v0.0.0-20240606204812-0bbfbd93a7ce // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
 	github.com/cockroachdb/pebble v1.1.2 // indirect
@@ -154,7 +156,6 @@ require (
 	github.com/sasha-s/go-deadlock v0.3.1 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
-	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect

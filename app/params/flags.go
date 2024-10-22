@@ -1,6 +1,10 @@
 package params
 
 var (
-	FlagExecutionClientURL  = "execution-client-url"
-	FlagExecutionClientType = "execution-client-type"
+	FlagExecutionClientType          = "execution-client-type"
+	FlagExecutionEngineURL           = "engine-api-url"
+	FlagExecutionEngineJWTSecretPath = "engine-api-jwtsecret"
+	FlagRPCURL                       = "eth-rpc-url"
+	FlagRPCJWTRefreshInterval        = "jwt-refresh-interval"
+	FlagRPCCheckInterval             = "eth-rpc-check-interval"
 )
