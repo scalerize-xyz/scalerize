@@ -5,10 +5,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
 	jwt "github.com/golang-jwt/jwt/v5"
+	"github.com/spf13/afero"
 )
 
 type JWTSecret [32]byte
@@ -25,13 +27,10 @@ func (c *EVMClient) refreshJWTForRPCClient(
 			ticker.Stop()
 			return
 		case <-ticker.C:
-			if err := c.createConnection(ctx, clientType); err != nil {
-				c.logger.Error(
-					"Failed to refresh engine auth token",
-					"err",
-					err,
-				)
+			if err := c.dialRPCCLient(ctx, clientType); err != nil {
+				c.logger.Error("Failed to refresh engine auth token: " + err.Error())
 			}
+			c.logger.Info("Refreshed JWT Token for ethereum engine API")
 		}
 	}
 }
@@ -39,14 +38,14 @@ func (c *EVMClient) refreshJWTForRPCClient(
 func getJWTFromPath(path string) (JWTSecret, error) {
 	var result JWTSecret
 
-	// data, err := afero.ReadFile(afero.NewOsFs(), path)
-	// if err != nil {
-	// 	return result, err
-	// }
+	data, err := afero.ReadFile(afero.NewOsFs(), path)
+	if err != nil {
+		return result, err
+	}
 
-	// hexString := strings.TrimPrefix(strings.TrimSpace(string(data)), "0x")
+	hexString := strings.TrimPrefix(strings.TrimSpace(string(data)), "0x")
 
-	bytes, err := hex.DecodeString("7b05baf268a8c4e8d5f17f76d2bbcaa5f61fefd1ca78ab8af42d12e1c59eb82a")
+	bytes, err := hex.DecodeString(hexString)
 	if err != nil {
 		return result, fmt.Errorf("failed to decode hex string: %v", err)
 	}

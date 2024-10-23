@@ -16,6 +16,7 @@ COPY . .
 # Make the binary
 RUN make build
 RUN make localtestnet-example-config
+RUN echo "completed testnet config"
 
 # Final image
 FROM alpine:3.17.3
@@ -28,6 +29,7 @@ WORKDIR /
 COPY --from=build-env /go/src/github.com/aerius-labs/scalerize/build/scalerized /usr/bin/scalerized
 COPY --from=build-env /go/src/github.com/aerius-labs/scalerize/example-testnet example-testnet
 COPY --from=build-env /go/src/github.com/aerius-labs/scalerize/start-testnet-node.sh start-testnet-node.sh
+COPY --from=build-env /go/src/github.com/aerius-labs/scalerize/testing/files/jwt.hex jwt.hex
 
 # Run scalerized by default
 CMD ["scalerized"]

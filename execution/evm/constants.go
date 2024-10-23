@@ -16,3 +16,12 @@ const (
 	// GetClientVersionV1 for retrieving the capabilities of the peer.
 	GetClientVersionV1 = "engine_getClientVersionV1"
 )
+
+func ScalerizeSupportedCapabilities() []string {
+	return []string{
+		ForkchoiceUpdatedMethodV3,
+		GetPayloadMethodV3,
+		NewPayloadMethodV3,
+		GetClientVersionV1,
+	}
+}

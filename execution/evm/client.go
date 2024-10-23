@@ -18,11 +18,6 @@ const (
 	rpcClient    = "rpc-client"
 )
 
-type (
-	EngineClient ethclient.Client
-	RPCClient    ethclient.Client
-)
-
 type EVMClient struct {
 	config       *EVMConfig
 	engineClient *ethclient.Client
@@ -44,27 +39,26 @@ func (client *EVMClient) Name() string {
 func (c *EVMClient) Start(
 	ctx context.Context,
 ) error {
+	var (
+		wg     sync.WaitGroup
+		ticker = time.NewTicker(c.config.rpcCheckInterval)
+	)
+
 	defer func() {
+		ticker.Stop()
 		go c.refreshJWTForRPCClient(ctx, engineClient)
 	}()
 
 	c.logger.Info("Connecting to the execution client")
 
-	c.logger.Info("Initializing connection with Ethereum Engine API:", c.config.engineAPIURL)
-	if err := c.createConnection(ctx, engineClient); err != nil {
-		return nil
-	}
-
-	var wg sync.WaitGroup
-
 	wg.Add(2)
-	ticker := time.NewTicker(c.config.rpcCheckInterval)
-	defer ticker.Stop()
+
+	c.logger.Info("Initializing connection with Ethereum Engine API: " + c.config.engineAPIURL.String())
 	go func() {
 		defer wg.Done()
 		for range ticker.C {
-			c.logger.Info("Waiting for ethereum engine api to be available: ", c.config.engineAPIURL)
-			if err := c.createConnection(ctx, engineClient); err != nil {
+			c.logger.Info("Waiting for ethereum engine api to be available: " + c.config.engineAPIURL.String())
+			if err := c.connect(ctx, engineClient); err != nil {
 				c.logger.Error("failed to create connection to ethereum engine api")
 				continue
 			}
@@ -73,11 +67,12 @@ func (c *EVMClient) Start(
 		}
 	}()
 
+	c.logger.Info("Initializing connection with Ethereum RPC API: " + c.config.engineAPIURL.String())
 	go func() {
 		defer wg.Done()
 		for range ticker.C {
-			c.logger.Info("Waiting for ethereum rpc api to be available: ", c.config.rpcURL)
-			if err := c.createConnection(ctx, rpcClient); err != nil {
+			c.logger.Info("Waiting for ethereum rpc api to be available: " + c.config.rpcURL.String())
+			if err := c.connect(ctx, rpcClient); err != nil {
 				c.logger.Error("failed to create connection to ethereum rpc api")
 				continue
 			}
@@ -90,7 +85,42 @@ func (c *EVMClient) Start(
 	return nil
 }
 
-func (c *EVMClient) createConnection(ctx context.Context, clientType string) error {
+func (c *EVMClient) connect(ctx context.Context, clientType string) error {
+	if err := c.dialRPCCLient(ctx, clientType); err != nil {
+		return err
+	}
+
+	switch clientType {
+	case engineClient:
+		if _, err := c.ExchangeCapabilities(ctx, ScalerizeSupportedCapabilities()); err != nil {
+			c.logger.Error("failed to exchange capabilities: " + err.Error())
+			return err
+		}
+
+		c.logger.Info("Connected to ethereum engine API: " + c.config.engineAPIURL.String())
+
+	case rpcClient:
+		chainID, err := c.rpcClient.NetworkID(context.Background())
+		if err != nil {
+			c.logger.Error("failed to get eth network id: " + err.Error())
+			return err
+		}
+
+		if chainID.Cmp(c.config.ethChainID) != 0 {
+			c.logger.Error("eth chain ID specified not equal to the actual chain ID")
+			return fmt.Errorf("chainID do not match for the eth client with what specified in scalerize config")
+		}
+
+		c.logger.Info("Connected to ethereum RPC API: " + c.config.rpcURL.String())
+
+	default:
+		return fmt.Errorf("invalid evm client type")
+	}
+
+	return nil
+}
+
+func (c *EVMClient) dialRPCCLient(ctx context.Context, clientType string) error {
 	var err error
 
 	switch clientType {
@@ -107,16 +137,12 @@ func (c *EVMClient) createConnection(ctx context.Context, clientType string) err
 		}
 		c.engineClient = ethclient.NewClient(client)
 
-		c.logger.Info("Connected to ethereum engine API: ", c.config.engineAPIURL)
-
 	case rpcClient:
 		client, err := rpc.DialContext(ctx, c.config.rpcURL.String())
 		if err != nil {
 			return err
 		}
 		c.rpcClient = ethclient.NewClient(client)
-
-		c.logger.Info("Connected to ethereum rpc API: ", c.config.rpcURL)
 
 	default:
 		return fmt.Errorf("invalid evm client type")

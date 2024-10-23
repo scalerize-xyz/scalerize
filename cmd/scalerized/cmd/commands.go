@@ -48,8 +48,9 @@ func initRootCmd(rootCmd *cobra.Command, txConfig client.TxConfig, basicManager 
 		startCmd.PersistentFlags().String(params.FlagExecutionEngineURL, evm.DefaultEngineAPIURL, "URL for the Ethereum execution engine API")
 		startCmd.PersistentFlags().String(params.FlagRPCURL, evm.DefaultRPCURL, "URL for Ethereum RPC calls")
 		startCmd.PersistentFlags().String(params.FlagExecutionEngineJWTSecretPath, evm.DefaultJWTSecretPath, "Path to a JWT secret to use for the authenticated engine-API RPC server")
-		startCmd.PersistentFlags().String(params.FlagRPCJWTRefreshInterval, evm.DefaultRPCJWTRefreshInterval.String(), "Ethereum execution engine API jwt refresh interval")
 		startCmd.PersistentFlags().String(params.FlagRPCCheckInterval, evm.DefaultRPCCheckInterval.String(), "Ethereum RPC server startup check interval")
+		startCmd.PersistentFlags().String(params.FlagRPCJWTRefreshInterval, evm.DefaultRPCJWTRefreshInterval.String(), "Ethereum execution engine API jwt refresh interval")
+		startCmd.PersistentFlags().String(params.FlagEthChainID, evm.DefaultEthChainID, "Ethereum execution client chain id")
 	})
 
 	// add keybase, auxiliary RPC, query, genesis, and tx child commands

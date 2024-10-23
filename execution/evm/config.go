@@ -1,6 +1,7 @@
 package evm
 
 import (
+	"math/big"
 	"net/url"
 	"time"
 )
@@ -11,6 +12,7 @@ const (
 	DefaultRPCJWTRefreshInterval = 20 * time.Second
 	DefaultJWTSecretPath         = "./jwt.hex"
 	DefaultRPCCheckInterval      = 3 * time.Second
+	DefaultEthChainID            = "80087"
 )
 
 type EVMConfig struct {
@@ -19,9 +21,10 @@ type EVMConfig struct {
 	jwtSecret             *JWTSecret
 	rpcJWTRefreshInterval time.Duration
 	rpcCheckInterval      time.Duration
+	ethChainID            *big.Int
 }
 
-func NewEVMConfig(rpcJWTRefreshInterval, rpcCheckInterval time.Duration, engineAPIURL, rpcURL, jwtSecretPath string) (*EVMConfig, error) {
+func NewEVMConfig(ethChainID *big.Int, rpcJWTRefreshInterval, rpcCheckInterval time.Duration, engineAPIURL, rpcURL, jwtSecretPath string) (*EVMConfig, error) {
 	eu, err := url.Parse(engineAPIURL)
 	if err != nil {
 		return nil, err
@@ -43,5 +46,6 @@ func NewEVMConfig(rpcJWTRefreshInterval, rpcCheckInterval time.Duration, engineA
 		jwtSecret:             &secret,
 		rpcJWTRefreshInterval: rpcJWTRefreshInterval,
 		rpcCheckInterval:      rpcCheckInterval,
+		ethChainID:            ethChainID,
 	}, nil
 }

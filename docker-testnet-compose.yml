@@ -12,8 +12,8 @@ services:
     environment:
       - ID=0
       - LOG=${LOG:-scalerized.log}
-      - ENGINE_API=http://172.0.0.6:8551
-      - RPC_API=http://172.0.0.6:8545
+      - ENGINE_API=http://172.20.0.6:8551
+      - RPC_API=http://172.20.0.6:8545
     volumes:
       - ./localnet-setup/node0/scalerized:/scalerize:Z
     networks:
@@ -33,8 +33,8 @@ services:
     environment:
       - ID=1
       - LOG=${LOG:-scalerized.log}
-      - ENGINE_API=http://172.0.0.7:8551
-      - RPC_API=http://172.0.0.7:8545
+      - ENGINE_API=http://172.20.0.7:8551
+      - RPC_API=http://172.20.0.7:8545
 
     volumes:
       - ./localnet-setup/node1/scalerized:/scalerize:Z
@@ -50,8 +50,8 @@ services:
     environment:
       - ID=2
       - LOG=${LOG:-scalerized.log}
-      - ENGINE_API=http://172.0.0.8:8551
-      - RPC_API=http://172.0.0.8:8545
+      - ENGINE_API=http://172.20.0.8:8551
+      - RPC_API=http://172.20.0.8:8545
 
     ports:
       - "26659:26657"
@@ -71,8 +71,8 @@ services:
     environment:
       - ID=3
       - LOG=${LOG:-scalerized.log}
-      - ENGINE_API=http://172.0.0.9:8551
-      - RPC_API=http://172.0.0.9:8545
+      - ENGINE_API=http://172.20.0.9:8551
+      - RPC_API=http://172.20.0.9:8545
 
     ports:
       - "26660:26657"

@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"math/big"
 	"time"
 
 	"github.com/aerius-labs/scalerize/abci"
@@ -141,7 +142,6 @@ func NewScalerizeApp(
 	); err != nil {
 		return nil, err
 	}
-
 	clientType := appOpts.Get(params.FlagExecutionClientType).(string)
 	switch clientType {
 	case evm.EVM:
@@ -158,7 +158,14 @@ func NewScalerizeApp(
 			return nil, err
 		}
 
-		evmConfig, err := evm.NewEVMConfig(rpcJWTRefreshInterval, rpcCheckInterval, engineAPIURL, rpcURL, jwtSecretPath)
+		strEthChainID := appOpts.Get(params.FlagEthChainID).(string)
+		ethChainID := new(big.Int)
+		_, ok := ethChainID.SetString(strEthChainID, 0)
+		if !ok {
+			return nil, fmt.Errorf("failed to convert eth chainID to big.Int")
+		}
+
+		evmConfig, err := evm.NewEVMConfig(ethChainID, rpcJWTRefreshInterval, rpcCheckInterval, engineAPIURL, rpcURL, jwtSecretPath)
 		if err != nil {
 			return nil, err
 		}
