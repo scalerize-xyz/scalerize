@@ -27,7 +27,7 @@ func (c *EVMClient) refreshJWTForRPCClient(
 			ticker.Stop()
 			return
 		case <-ticker.C:
-			if err := c.dialRPCCLient(ctx, clientType); err != nil {
+			if err := c.dialRPCCLient(clientType); err != nil {
 				c.logger.Error("Failed to refresh engine auth token: " + err.Error())
 			}
 			c.logger.Info("Refreshed JWT Token for ethereum engine API")

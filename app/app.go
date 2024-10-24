@@ -113,7 +113,6 @@ func NewScalerizeApp(
 	appOpts servertypes.AppOptions,
 	baseAppOptions ...func(*baseapp.BaseApp),
 ) (*ScalerizeApp, error) {
-
 	var (
 		app         = &ScalerizeApp{}
 		appBuilder  *runtime.AppBuilder
@@ -181,7 +180,7 @@ func NewScalerizeApp(
 			}
 		}()
 
-		if abciHandler, err = evm.NewEVMABCIHandler(evmClient); err != nil {
+		if abciHandler, err = evm.NewEVMABCIHandler(ctx, evmClient); err != nil {
 			app.Logger().Error("failed to create EVM ABCI Handler")
 			return nil, err
 		}

@@ -1,49 +1,94 @@
 package evm
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type EVMABCIHandler struct {
+	ctx    context.Context
 	client *EVMClient
 }
 
-func NewEVMABCIHandler(evmClient *EVMClient) (*EVMABCIHandler, error) {
+func NewEVMABCIHandler(ctx context.Context, evmClient *EVMClient) (*EVMABCIHandler, error) {
 	return &EVMABCIHandler{
+		ctx:    ctx,
 		client: evmClient,
 	}, nil
 }
 
 func (h *EVMABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
-		fmt.Println("PREPARE PROPOSAL CALLED")
+		// 1. getlatestblock number
+		lbn, err := h.client.GetLatestBlockNumber()
+		if err != nil {
+			return nil, err
+		}
 
-		prepareProposalMockResponse := `
-			{
-				"parentHash": "0x1ecdf28cea1886cee4b560ae85bc5e41f675646f6e7d21c6b8214fdf917da360",
-				"feeRecipient": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
-				"stateRoot": "0xe7d2096d708957a50a144c303dfb69cfcf9d3182ab3a9d52a76e592fcde11109",
-				"receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-				"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-				"prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
-				"blockNumber": "0x1",
-				"gasLimit": "0x1c9c380",
-				"gasUsed": "0x0",
-				"timestamp": "0x66fe8cd8",
-				"extraData": "0x726574682f76312e302e372f6c696e7578",
-				"baseFeePerGas": "0x342770c0",
-				"blockHash": "0xbcd50aec609f2613ac63d51eb87a89c2d6d15800f2d87ae3c56ab4ad1c6b5da5",
-				"transactions": [],
-				"withdrawals": [],
-				"blobGasUsed": "0x0",
-				"excessBlobGas": "0x0"
-			}`
+		fmt.Printf("LATEST BLOCK NUMBER: %v\n", lbn.Int64())
+
+		// 2. get block by number
+		bh, err := h.client.GetBlockByNumber(lbn, false)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Printf("LATEST BLOCK HEADER: %+v\n", bh)
+
+		// 2.5 use jwt generator to generate token
+		//done in client formation
+
+		// 3. Prepare request for fork choice update
+		state := &ForkchoiceState{
+			HeadBlockHash:      bh.Hash(),
+			SafeBlockHash:      bh.ParentHash,
+			FinalizedBlockHash: bh.ParentHash,
+		}
+
+		randao, err := generateRandao()
+		if err != nil {
+			return nil, err
+		}
+
+		sfr, err := hexToAddress("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
+		if err != nil {
+			return nil, err
+		}
+
+		attr := PayloadAttributes{
+			Timestamp:             uint64(time.Now().Unix()),
+			Random:                randao,
+			SuggestedFeeRecipient: sfr,
+			ParentBeaconBlockRoot: *bh.ParentBeaconRoot,
+			Withdrawals:           []*types.Withdrawal{},
+		}
+
+		fcres, err := h.client.ForkchoiceUpdated(state, attr)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Printf("ForkchoiceUpdated response: %+v\n", fcres)
+
+		// 4. Recieve the payload ID and prepare request for get payload
+		payload, err := h.client.GetPayload(*fcres.PayloadID)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Printf("PAYLOAD: %+v\n", payload)
+
+		// Note: put retries in 3and 4 and use JWT generator in the same
+
+		// 5. get payload and make a prepareProposal response
 
 		return &abci.ResponsePrepareProposal{
-			Txs: [][]byte{[]byte(prepareProposalMockResponse)},
+			Txs: [][]byte{},
 		}, nil
 	}
 }
@@ -51,6 +96,7 @@ func (h *EVMABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 func (h *EVMABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
 		fmt.Printf("Process Proposal Request: %+v\n", req)
+		// Once you receive the prepare proposal response make a new payload request to the EVM.
 		return &abci.ResponseProcessProposal{
 			Status: abci.ResponseProcessProposal_ACCEPT,
 		}, nil

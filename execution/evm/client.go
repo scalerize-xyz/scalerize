@@ -19,6 +19,7 @@ const (
 )
 
 type EVMClient struct {
+	ctx          context.Context
 	config       *EVMConfig
 	engineClient *ethclient.Client
 	rpcClient    *ethclient.Client
@@ -27,6 +28,7 @@ type EVMClient struct {
 
 func NewEVMClient(ctx context.Context, cfg *EVMConfig, logger log.Logger) (*EVMClient, error) {
 	return &EVMClient{
+		ctx:    ctx,
 		config: cfg,
 		logger: logger,
 	}, nil
@@ -50,7 +52,6 @@ func (c *EVMClient) Start(
 	}()
 
 	c.logger.Info("Connecting to the execution client")
-
 	wg.Add(2)
 
 	c.logger.Info("Initializing connection with Ethereum Engine API: " + c.config.engineAPIURL.String())
@@ -58,7 +59,7 @@ func (c *EVMClient) Start(
 		defer wg.Done()
 		for range ticker.C {
 			c.logger.Info("Waiting for ethereum engine api to be available: " + c.config.engineAPIURL.String())
-			if err := c.connect(ctx, engineClient); err != nil {
+			if err := c.connect(engineClient); err != nil {
 				c.logger.Error("failed to create connection to ethereum engine api")
 				continue
 			}
@@ -72,7 +73,7 @@ func (c *EVMClient) Start(
 		defer wg.Done()
 		for range ticker.C {
 			c.logger.Info("Waiting for ethereum rpc api to be available: " + c.config.rpcURL.String())
-			if err := c.connect(ctx, rpcClient); err != nil {
+			if err := c.connect(rpcClient); err != nil {
 				c.logger.Error("failed to create connection to ethereum rpc api")
 				continue
 			}
@@ -85,14 +86,14 @@ func (c *EVMClient) Start(
 	return nil
 }
 
-func (c *EVMClient) connect(ctx context.Context, clientType string) error {
-	if err := c.dialRPCCLient(ctx, clientType); err != nil {
+func (c *EVMClient) connect(clientType string) error {
+	if err := c.dialRPCCLient(clientType); err != nil {
 		return err
 	}
 
 	switch clientType {
 	case engineClient:
-		if _, err := c.ExchangeCapabilities(ctx, ScalerizeSupportedCapabilities()); err != nil {
+		if _, err := c.ExchangeCapabilities(ScalerizeSupportedCapabilities()); err != nil {
 			c.logger.Error("failed to exchange capabilities: " + err.Error())
 			return err
 		}
@@ -120,7 +121,7 @@ func (c *EVMClient) connect(ctx context.Context, clientType string) error {
 	return nil
 }
 
-func (c *EVMClient) dialRPCCLient(ctx context.Context, clientType string) error {
+func (c *EVMClient) dialRPCCLient(clientType string) error {
 	var err error
 
 	switch clientType {
@@ -130,7 +131,7 @@ func (c *EVMClient) dialRPCCLient(ctx context.Context, clientType string) error 
 			return err
 		}
 		client, err := rpc.DialOptions(
-			ctx, c.config.engineAPIURL.String(), rpc.WithHeaders(header),
+			c.ctx, c.config.engineAPIURL.String(), rpc.WithHeaders(header),
 		)
 		if err != nil {
 			return err
@@ -138,7 +139,7 @@ func (c *EVMClient) dialRPCCLient(ctx context.Context, clientType string) error 
 		c.engineClient = ethclient.NewClient(client)
 
 	case rpcClient:
-		client, err := rpc.DialContext(ctx, c.config.rpcURL.String())
+		client, err := rpc.DialContext(c.ctx, c.config.rpcURL.String())
 		if err != nil {
 			return err
 		}

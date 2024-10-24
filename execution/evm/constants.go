@@ -11,6 +11,8 @@ const (
 	BlockByHashMethod = "eth_getBlockByHash"
 	// BlockByNumberMethod for retrieving a block by its number.
 	BlockByNumberMethod = "eth_getBlockByNumber"
+	// BlockNumberMethod for retrieving latest block number.
+	BlockNumberMethod = "eth_blockNumber"
 	// ExchangeCapabilities for exchanging capabilities with the peer.
 	ExchangeCapabilities = "engine_exchangeCapabilities"
 	// GetClientVersionV1 for retrieving the capabilities of the peer.
