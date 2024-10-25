@@ -33,8 +33,8 @@ func (c *EVMClient) ForkchoiceUpdated(state *ForkchoiceState, attributes any) (*
 	return result, nil
 }
 
-func (c *EVMClient) GetPayload(payloadID PayloadID) (*ExecutionPayloadEnvelope, error) {
-	result := &ExecutionPayloadEnvelope{}
+func (c *EVMClient) GetPayload(payloadID PayloadID) (*ExecutableData, error) {
+	result := &ExecutableData{}
 
 	err := c.engineClient.Client().CallContext(
 		c.ctx, &result, GetPayloadMethodV3, payloadID,
@@ -43,10 +43,10 @@ func (c *EVMClient) GetPayload(payloadID PayloadID) (*ExecutionPayloadEnvelope, 
 	return result, err
 }
 
-func (c *EVMClient) NewPayload(payload ExecutionPayloadEnvelope, parentBlockRoot *common.Hash) (*PayloadStatus, error) {
+func (c *EVMClient) NewPayload(payload ExecutableData, versionedHashes []common.Hash, parentBlockRoot common.Hash) (*PayloadStatus, error) {
 	result := &PayloadStatus{}
 	if err := c.engineClient.Client().CallContext(
-		c.ctx, result, NewPayloadMethodV3, payload, parentBlockRoot,
+		c.ctx, result, NewPayloadMethodV3, payload, versionedHashes, parentBlockRoot,
 	); err != nil {
 		return nil, err
 	}

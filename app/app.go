@@ -173,12 +173,15 @@ func NewScalerizeApp(
 		if err != nil {
 			return nil, err
 		}
+		ensureClientCreatedCh := make(chan bool)
 
 		go func() {
-			if err := evmClient.Start(ctx); err != nil {
+			if err := evmClient.Start(ctx, ensureClientCreatedCh); err != nil {
 				panic(err)
 			}
 		}()
+
+		<-ensureClientCreatedCh
 
 		if abciHandler, err = evm.NewEVMABCIHandler(ctx, evmClient); err != nil {
 			app.Logger().Error("failed to create EVM ABCI Handler")

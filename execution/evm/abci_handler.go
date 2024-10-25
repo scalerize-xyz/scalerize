@@ -2,11 +2,13 @@ package evm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -24,7 +26,8 @@ func NewEVMABCIHandler(ctx context.Context, evmClient *EVMClient) (*EVMABCIHandl
 
 func (h *EVMABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
-		// 1. getlatestblock number
+		// todo: put retries for rpc and engine api calls
+
 		lbn, err := h.client.GetLatestBlockNumber()
 		if err != nil {
 			return nil, err
@@ -32,7 +35,6 @@ func (h *EVMABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 
 		fmt.Printf("LATEST BLOCK NUMBER: %v\n", lbn.Int64())
 
-		// 2. get block by number
 		bh, err := h.client.GetBlockByNumber(lbn, false)
 		if err != nil {
 			return nil, err
@@ -40,10 +42,6 @@ func (h *EVMABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 
 		fmt.Printf("LATEST BLOCK HEADER: %+v\n", bh)
 
-		// 2.5 use jwt generator to generate token
-		//done in client formation
-
-		// 3. Prepare request for fork choice update
 		state := &ForkchoiceState{
 			HeadBlockHash:      bh.Hash(),
 			SafeBlockHash:      bh.ParentHash,
@@ -75,28 +73,55 @@ func (h *EVMABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 
 		fmt.Printf("ForkchoiceUpdated response: %+v\n", fcres)
 
-		// 4. Recieve the payload ID and prepare request for get payload
-		payload, err := h.client.GetPayload(*fcres.PayloadID)
+		payloadExData, err := h.client.GetPayload(*fcres.PayloadID)
 		if err != nil {
 			return nil, err
 		}
 
-		fmt.Printf("PAYLOAD: %+v\n", payload)
+		fmt.Printf("PAYLOAD EXECUTABLE DATA: %+v\n", payloadExData)
 
-		// Note: put retries in 3and 4 and use JWT generator in the same
+		pb, err := json.Marshal(payloadExData)
+		if err != nil {
+			return nil, err
+		}
 
-		// 5. get payload and make a prepareProposal response
+		ab, err := json.Marshal(attr)
+		if err != nil {
+			return nil, err
+		}
 
 		return &abci.ResponsePrepareProposal{
-			Txs: [][]byte{},
+			Txs: [][]byte{pb, ab},
 		}, nil
 	}
 }
 
 func (h *EVMABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
-		fmt.Printf("Process Proposal Request: %+v\n", req)
 		// Once you receive the prepare proposal response make a new payload request to the EVM.
+		var (
+			payloadExData = &ExecutableData{}
+			attributes    = &PayloadAttributes{}
+		)
+
+		if err := json.Unmarshal(req.Txs[0], payloadExData); err != nil {
+			return nil, err
+		}
+
+		if err := json.Unmarshal(req.Txs[0], attributes); err != nil {
+			return nil, err
+		}
+
+		fmt.Printf("RECIEVED EXECUTABLE DATA: %+v\n", payloadExData)
+		fmt.Printf("RECIEVED PAYLOAD ATTRIBUTES: %+v\n", attributes)
+
+		res, err := h.client.NewPayload(*payloadExData, []common.Hash{}, (common.Hash)(attributes.ParentBeaconBlockRoot))
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Printf("NEW PAYLOAD RESULT: %+v\n", res)
+
 		return &abci.ResponseProcessProposal{
 			Status: abci.ResponseProcessProposal_ACCEPT,
 		}, nil

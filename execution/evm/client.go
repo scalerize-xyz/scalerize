@@ -38,9 +38,7 @@ func (client *EVMClient) Name() string {
 	return EVM
 }
 
-func (c *EVMClient) Start(
-	ctx context.Context,
-) error {
+func (c *EVMClient) Start(ctx context.Context, ensureClientCreatedCh chan bool) error {
 	var (
 		wg     sync.WaitGroup
 		ticker = time.NewTicker(c.config.rpcCheckInterval)
@@ -83,6 +81,7 @@ func (c *EVMClient) Start(
 	}()
 
 	wg.Wait()
+	ensureClientCreatedCh <- true
 	return nil
 }
 

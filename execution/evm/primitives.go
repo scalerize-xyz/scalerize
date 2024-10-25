@@ -68,6 +68,8 @@ type ExecutableData struct {
 	BlockHash     common.Hash         `json:"blockHash"`
 	Transactions  [][]byte            `json:"transactions"`
 	Withdrawals   []*types.Withdrawal `json:"withdrawals"`
+	BlobGasUsed   uint64              `json:"blobGasUsed"`
+	ExcessBlobGas uint64              `json:"excessBlobGas"`
 }
 
 type PayloadAttributes struct {
