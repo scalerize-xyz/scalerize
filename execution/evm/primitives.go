@@ -1,9 +1,8 @@
 package evm
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -48,7 +47,15 @@ type PayloadStatus struct {
 
 type ExecutionPayloadEnvelope struct {
 	ExecutionPayload *ExecutableData `json:"executionPayload"`
-	BlockValue       *big.Int        `json:"blockValue"`
+	BlockValue       common.Hash     `json:"blockValue"`
+	BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
+	Override         bool            `json:"shouldOverrideBuilder"`
+}
+
+type BlobsBundleV1 struct {
+	Commitments []hexutil.Bytes `json:"commitments"`
+	Proofs      []hexutil.Bytes `json:"proofs"`
+	Blobs       []hexutil.Bytes `json:"blobs"`
 }
 
 // ExecutableData is the data necessary to execute an EL payload.

@@ -33,8 +33,8 @@ func (c *EVMClient) ForkchoiceUpdated(state *ForkchoiceState, attributes any) (*
 	return result, nil
 }
 
-func (c *EVMClient) GetPayload(payloadID PayloadID) (*ExecutableData, error) {
-	result := &ExecutableData{}
+func (c *EVMClient) GetPayload(payloadID PayloadID) (*ExecutionPayloadEnvelope, error) {
+	result := &ExecutionPayloadEnvelope{}
 
 	err := c.engineClient.Client().CallContext(
 		c.ctx, &result, GetPayloadMethodV3, payloadID,

@@ -41,6 +41,7 @@ func (h *EVMABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 		}
 
 		fmt.Printf("LATEST BLOCK HEADER: %+v\n", bh)
+		fmt.Println("LATEST BLOCK HASH: ", bh.Hash())
 
 		state := &ForkchoiceState{
 			HeadBlockHash:      bh.Hash(),
@@ -108,7 +109,7 @@ func (h *EVMABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 			return nil, err
 		}
 
-		if err := json.Unmarshal(req.Txs[0], attributes); err != nil {
+		if err := json.Unmarshal(req.Txs[1], attributes); err != nil {
 			return nil, err
 		}
 
