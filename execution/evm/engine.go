@@ -45,6 +45,7 @@ func (c *EVMClient) GetPayload(payloadID PayloadID) (*ExecutionPayloadEnvelope, 
 
 func (c *EVMClient) NewPayload(payload ExecutableData, versionedHashes []common.Hash, parentBlockRoot common.Hash) (*PayloadStatus, error) {
 	result := &PayloadStatus{}
+
 	if err := c.engineClient.Client().CallContext(
 		c.ctx, result, NewPayloadMethodV3, payload, versionedHashes, parentBlockRoot,
 	); err != nil {

@@ -8,6 +8,7 @@ import (
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -80,8 +81,8 @@ func (h *EVMABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 		}
 
 		fmt.Printf("PAYLOAD EXECUTABLE DATA: %+v\n", payloadExData)
-
-		pb, err := json.Marshal(payloadExData)
+		fmt.Printf("EXECUTION PAYLOAD: %+v\n", payloadExData.ExecutionPayload)
+		pb, err := payloadExData.ExecutionPayload.MarshalJSON()
 		if err != nil {
 			return nil, err
 		}
@@ -101,11 +102,11 @@ func (h *EVMABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
 		// Once you receive the prepare proposal response make a new payload request to the EVM.
 		var (
-			payloadExData = &ExecutableData{}
-			attributes    = &PayloadAttributes{}
+			executableData = &ExecutableData{}
+			attributes     = &PayloadAttributes{}
 		)
 
-		if err := json.Unmarshal(req.Txs[0], payloadExData); err != nil {
+		if err := executableData.UnmarshalJSON(req.Txs[0]); err != nil {
 			return nil, err
 		}
 
@@ -113,10 +114,10 @@ func (h *EVMABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 			return nil, err
 		}
 
-		fmt.Printf("RECIEVED EXECUTABLE DATA: %+v\n", payloadExData)
+		fmt.Printf("RECIEVED EXECUTION PAYLOAD: %+v\n", executableData)
 		fmt.Printf("RECIEVED PAYLOAD ATTRIBUTES: %+v\n", attributes)
 
-		res, err := h.client.NewPayload(*payloadExData, []common.Hash{}, (common.Hash)(attributes.ParentBeaconBlockRoot))
+		res, err := h.client.NewPayload(*executableData, []common.Hash{}, (common.Hash)(attributes.ParentBeaconBlockRoot))
 		if err != nil {
 			return nil, err
 		}
