@@ -124,6 +124,19 @@ func (h *EVMABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 
 		fmt.Printf("NEW PAYLOAD RESULT: %+v\n", res)
 
+		state := &ForkchoiceState{
+			HeadBlockHash:      *res.LatestValidHash,
+			SafeBlockHash:      executableData.ParentHash,
+			FinalizedBlockHash: executableData.ParentHash,
+		}
+
+		fcres, err := h.client.ForkchoiceUpdated(state, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Printf("PROCESS PROPOSAL ForkchoiceUpdated response: %+v\n", fcres)
+
 		return &abci.ResponseProcessProposal{
 			Status: abci.ResponseProcessProposal_ACCEPT,
 		}, nil
