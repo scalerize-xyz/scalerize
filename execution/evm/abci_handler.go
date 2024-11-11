@@ -124,8 +124,21 @@ func (h *EVMABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 
 		fmt.Printf("NEW PAYLOAD RESULT: %+v\n", res)
 
+		return &abci.ResponseProcessProposal{
+			Status: abci.ResponseProcessProposal_ACCEPT,
+		}, nil
+	}
+}
+
+func (h *EVMABCIHandler) PreBlock() sdk.PreBlocker {
+	return func(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
+		executableData := &ExecutableData{}
+
+		if err := executableData.UnmarshalJSON(req.Txs[0]); err != nil {
+			return nil, err
+		}
 		state := &ForkchoiceState{
-			HeadBlockHash:      *res.LatestValidHash,
+			HeadBlockHash:      executableData.BlockHash,
 			SafeBlockHash:      executableData.ParentHash,
 			FinalizedBlockHash: executableData.ParentHash,
 		}
@@ -135,16 +148,8 @@ func (h *EVMABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 			return nil, err
 		}
 
-		fmt.Printf("PROCESS PROPOSAL ForkchoiceUpdated response: %+v\n", fcres)
+		fmt.Printf("PRE BLOCK ForkchoiceUpdated response: %+v\n", fcres)
 
-		return &abci.ResponseProcessProposal{
-			Status: abci.ResponseProcessProposal_ACCEPT,
-		}, nil
-	}
-}
-
-func (h *EVMABCIHandler) PreBlock() sdk.PreBlocker {
-	return func(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
 		return &sdk.ResponsePreBlock{
 			ConsensusParamsChanged: false,
 		}, nil
