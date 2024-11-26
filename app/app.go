@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/aerius-labs/scalerize/abci"
-	"github.com/aerius-labs/scalerize/execution/evm"
+	evmexec "github.com/aerius-labs/scalerize/execution/evm"
+	evmtypes "github.com/aerius-labs/scalerize/x/evm/types"
 	dbm "github.com/cosmos/cosmos-db"
 
 	"cosmossdk.io/core/appconfig"
@@ -18,6 +19,8 @@ import (
 	storetypes "cosmossdk.io/store/types"
 
 	clienthelpers "cosmossdk.io/client/v2/helpers"
+	"github.com/aerius-labs/scalerize/x/evm"
+	evmkeeper "github.com/aerius-labs/scalerize/x/evm/keeper"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -76,6 +79,7 @@ type ScalerizeApp struct {
 	StakingKeeper         *stakingkeeper.Keeper
 	DistrKeeper           distrkeeper.Keeper
 	ConsensusParamsKeeper consensuskeeper.Keeper
+	EVMKeeper             evmkeeper.Keeper
 
 	// simulation manager
 	sm *module.SimulationManager
@@ -143,7 +147,7 @@ func NewScalerizeApp(
 	}
 	clientType := appOpts.Get(params.FlagExecutionClientType).(string)
 	switch clientType {
-	case evm.EVM:
+	case evmexec.EVM:
 		engineAPIURL := appOpts.Get(params.FlagExecutionEngineURL).(string)
 		rpcURL := appOpts.Get(params.FlagRPCURL).(string)
 		jwtSecretPath := appOpts.Get(params.FlagExecutionEngineJWTSecretPath).(string)
@@ -164,12 +168,12 @@ func NewScalerizeApp(
 			return nil, fmt.Errorf("failed to convert eth chainID to big.Int")
 		}
 
-		evmConfig, err := evm.NewEVMConfig(ethChainID, rpcJWTRefreshInterval, rpcCheckInterval, engineAPIURL, rpcURL, jwtSecretPath)
+		evmConfig, err := evmexec.NewEVMConfig(ethChainID, rpcJWTRefreshInterval, rpcCheckInterval, engineAPIURL, rpcURL, jwtSecretPath)
 		if err != nil {
 			return nil, err
 		}
 
-		evmClient, err := evm.NewEVMClient(ctx, evmConfig, logger)
+		evmClient, err := evmexec.NewEVMClient(ctx, evmConfig, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +187,7 @@ func NewScalerizeApp(
 
 		<-ensureClientCreatedCh
 
-		if abciHandler, err = evm.NewEVMABCIHandler(ctx, evmClient); err != nil {
+		if abciHandler, err = evmexec.NewEVMABCIHandler(ctx, evmClient); err != nil {
 			app.Logger().Error("failed to create EVM ABCI Handler")
 			return nil, err
 		}
@@ -209,6 +213,25 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
+	storeUpgrades := storetypes.StoreUpgrades{
+		Added: []string{evmtypes.StoreKey},
+	}
+
+	if err := app.CommitMultiStore().LoadVersionAndUpgrade(app.CommitMultiStore().LatestVersion(), &storeUpgrades); err != nil {
+		return nil, err
+	}
+
+	evmstorekey := storetypes.NewKVStoreKey(evmtypes.StoreKey)
+	if err := app.RegisterStores(evmstorekey); err != nil {
+		return nil, err
+	}
+
+	evmKeeper := evmkeeper.NewKeeper(evmstorekey, app.appCodec)
+	app.EVMKeeper = *evmKeeper
+	if err := app.RegisterModules(evm.NewAppModule(evmKeeper)); err != nil {
+		return nil, err
+	}
+
 	/****  Module Options ****/
 
 	// create the simulation manager and define the order of the modules for deterministic simulations
@@ -219,6 +242,19 @@ func NewScalerizeApp(
 	if err := app.Load(loadLatest); err != nil {
 		return nil, err
 	}
+
+	for i := range app.ModuleManager.Modules {
+		fmt.Println("MODULE: ", i)
+	}
+
+	for _, k := range app.GetStoreKeys() {
+		fmt.Println("STORE KEYS: ", k)
+	}
+
+	fmt.Printf("Registered Message Router: %+v\n", app.MsgServiceRouter())
+	fmt.Printf("Registered GRPC Router: %+v\n", app.GRPCQueryRouter())
+
+	app.MsgServiceRouter()
 
 	return app, nil
 }

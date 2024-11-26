@@ -57,3 +57,7 @@ init:
 
 localtestnet-example-config: 
 	$(SCALERIZED_CONTAINER_DIR) testnet init-files --output-dir example-testnet --v $(NODES) --starting-ip-address $(STARTING-IP-ADDR) --keyring-backend test
+
+proto-gen:
+	@echo "Generating Protobuf files"
+	$(protoImage) sh ./scripts/protocgen.sh
