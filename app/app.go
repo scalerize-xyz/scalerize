@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net/http"
 	"time"
 
 	"github.com/aerius-labs/scalerize/abci"
 	evmexec "github.com/aerius-labs/scalerize/execution/evm"
 	evmtypes "github.com/aerius-labs/scalerize/x/evm/types"
 	dbm "github.com/cosmos/cosmos-db"
+	"github.com/labstack/echo/v4"
 
 	"cosmossdk.io/core/appconfig"
 	"cosmossdk.io/depinject"
@@ -43,6 +45,7 @@ import (
 	appv1alpha1 "cosmossdk.io/api/cosmos/app/v1alpha1"
 	_ "cosmossdk.io/api/cosmos/tx/config/v1" // import for side-effects
 	"github.com/aerius-labs/scalerize/app/params"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	_ "github.com/cosmos/cosmos-sdk/x/auth"           // import for side-effects
 	_ "github.com/cosmos/cosmos-sdk/x/auth/tx/config" // import for side-effects
 	_ "github.com/cosmos/cosmos-sdk/x/bank"           // import for side-effects
@@ -145,6 +148,12 @@ func NewScalerizeApp(
 	); err != nil {
 		return nil, err
 	}
+
+	fmt.Printf("TX CONFIG: %+v\n", app.txConfig)
+
+	evmstorekey := storetypes.NewKVStoreKey(evmtypes.StoreKey)
+	evmKeeper := evmkeeper.NewKeeper(evmstorekey, app.appCodec)
+
 	clientType := appOpts.Get(params.FlagExecutionClientType).(string)
 	switch clientType {
 	case evmexec.EVM:
@@ -185,6 +194,32 @@ func NewScalerizeApp(
 			}
 		}()
 
+		go func() {
+			e := echo.New()
+			ctx := sdk.UnwrapSDKContext(ctx)
+
+			e.GET("/getparams", func(c echo.Context) error {
+				params := evmKeeper.GetParams(ctx)
+				fmt.Printf("GETPARAMS RESPONSE: %+v\n", params)
+				return c.JSON(http.StatusOK, params)
+			})
+
+			e.PUT("/setparams", func(c echo.Context) error {
+				if err := evmKeeper.SetParams(ctx, evmtypes.Params{
+					Name: "scalerize",
+				}); err != nil {
+					return nil
+				}
+
+				params := evmKeeper.GetParams(ctx)
+				fmt.Printf("IN SETPARAMS GETPARAMS RESPONSE: %+v\n", params)
+
+				return nil
+			})
+
+			e.Start(":3000")
+		}()
+
 		<-ensureClientCreatedCh
 
 		if abciHandler, err = evmexec.NewEVMABCIHandler(ctx, evmClient); err != nil {
@@ -221,12 +256,12 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
-	evmstorekey := storetypes.NewKVStoreKey(evmtypes.StoreKey)
+	// evmstorekey := storetypes.NewKVStoreKey(evmtypes.StoreKey)
 	if err := app.RegisterStores(evmstorekey); err != nil {
 		return nil, err
 	}
 
-	evmKeeper := evmkeeper.NewKeeper(evmstorekey, app.appCodec)
+	// evmKeeper := evmkeeper.NewKeeper(evmstorekey, app.appCodec)
 	app.EVMKeeper = *evmKeeper
 	if err := app.RegisterModules(evm.NewAppModule(evmKeeper)); err != nil {
 		return nil, err
@@ -255,6 +290,22 @@ func NewScalerizeApp(
 	fmt.Printf("Registered GRPC Router: %+v\n", app.GRPCQueryRouter())
 
 	app.MsgServiceRouter()
+
+	go func() {
+		time.Sleep(10 * time.Second)
+		fmt.Println("UPDATING PARAMS")
+		resp, err := app.EVMKeeper.UpdateParams(ctx, &evmtypes.MsgUpdateParams{
+			Params: evmtypes.Params{},
+		})
+		if err != nil {
+			fmt.Println("ERROR: ", err)
+			panic(err)
+		}
+
+		fmt.Printf("RESPONSE: %+v\n", resp)
+
+		app.BaseApp.NewContext(false)
+	}()
 
 	return app, nil
 }

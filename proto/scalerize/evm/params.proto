@@ -8,6 +8,7 @@ option go_package = "github.com/aerius-labs/scalerize/x/evm/types";
 
 // Params defines the parameters for the module.
 message Params {
+  string name = 1;
   option (amino.name) = "github.com/aerius-labs/scalerize/x/evm/Params";
   option (gogoproto.equal) = true;
 }

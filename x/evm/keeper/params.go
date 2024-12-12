@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"fmt"
+
 	"github.com/aerius-labs/scalerize/x/evm/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
@@ -21,6 +23,8 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 	// if err := params.Validate(); err != nil {
 	// 	return err
 	// }
+
+	fmt.Printf("PARAMS: %+v\n", k.GetParams(ctx))
 
 	store := ctx.KVStore(k.storeKey)
 	bz, err := k.cdc.Marshal(&params)
