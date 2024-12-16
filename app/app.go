@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
@@ -45,7 +46,6 @@ import (
 	appv1alpha1 "cosmossdk.io/api/cosmos/app/v1alpha1"
 	_ "cosmossdk.io/api/cosmos/tx/config/v1" // import for side-effects
 	"github.com/aerius-labs/scalerize/app/params"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	_ "github.com/cosmos/cosmos-sdk/x/auth"           // import for side-effects
 	_ "github.com/cosmos/cosmos-sdk/x/auth/tx/config" // import for side-effects
 	_ "github.com/cosmos/cosmos-sdk/x/bank"           // import for side-effects
@@ -151,8 +151,8 @@ func NewScalerizeApp(
 
 	fmt.Printf("TX CONFIG: %+v\n", app.txConfig)
 
-	evmstorekey := storetypes.NewKVStoreKey(evmtypes.StoreKey)
-	evmKeeper := evmkeeper.NewKeeper(evmstorekey, app.appCodec)
+	// evmstorekey := storetypes.NewKVStoreKey(evmtypes.StoreKey)
+	evmKeeper := evmkeeper.NewKeeper(evmtypes.EVMStoreKey, app.appCodec)
 
 	clientType := appOpts.Get(params.FlagExecutionClientType).(string)
 	switch clientType {
@@ -194,32 +194,6 @@ func NewScalerizeApp(
 			}
 		}()
 
-		go func() {
-			e := echo.New()
-			ctx := sdk.UnwrapSDKContext(ctx)
-
-			e.GET("/getparams", func(c echo.Context) error {
-				params := evmKeeper.GetParams(ctx)
-				fmt.Printf("GETPARAMS RESPONSE: %+v\n", params)
-				return c.JSON(http.StatusOK, params)
-			})
-
-			e.PUT("/setparams", func(c echo.Context) error {
-				if err := evmKeeper.SetParams(ctx, evmtypes.Params{
-					Name: "scalerize",
-				}); err != nil {
-					return nil
-				}
-
-				params := evmKeeper.GetParams(ctx)
-				fmt.Printf("IN SETPARAMS GETPARAMS RESPONSE: %+v\n", params)
-
-				return nil
-			})
-
-			e.Start(":3000")
-		}()
-
 		<-ensureClientCreatedCh
 
 		if abciHandler, err = evmexec.NewEVMABCIHandler(ctx, evmClient); err != nil {
@@ -257,7 +231,7 @@ func NewScalerizeApp(
 	}
 
 	// evmstorekey := storetypes.NewKVStoreKey(evmtypes.StoreKey)
-	if err := app.RegisterStores(evmstorekey); err != nil {
+	if err := app.RegisterStores(evmtypes.EVMStoreKey); err != nil {
 		return nil, err
 	}
 
@@ -289,22 +263,51 @@ func NewScalerizeApp(
 	fmt.Printf("Registered Message Router: %+v\n", app.MsgServiceRouter())
 	fmt.Printf("Registered GRPC Router: %+v\n", app.GRPCQueryRouter())
 
-	app.MsgServiceRouter()
+	commitMultistore := app.CommitMultiStore()
+	cacheMultistore := app.CommitMultiStore().CacheMultiStore()
 
 	go func() {
-		time.Sleep(10 * time.Second)
-		fmt.Println("UPDATING PARAMS")
-		resp, err := app.EVMKeeper.UpdateParams(ctx, &evmtypes.MsgUpdateParams{
-			Params: evmtypes.Params{},
+		e := echo.New()
+
+		e.GET("/getparams", func(c echo.Context) error {
+			params := evmtypes.Params{}
+			kvstore := commitMultistore.GetKVStore(evmtypes.EVMStoreKey)
+			bz := kvstore.Get([]byte{3})
+
+			if err := json.Unmarshal(bz, &params); err != nil {
+				return err
+			}
+
+			return c.JSON(http.StatusOK, params)
 		})
-		if err != nil {
-			fmt.Println("ERROR: ", err)
-			panic(err)
-		}
 
-		fmt.Printf("RESPONSE: %+v\n", resp)
+		e.PUT("/setparams", func(c echo.Context) error {
+			params := evmtypes.Params{
+				Name: "Scalerized",
+			}
 
-		app.BaseApp.NewContext(false)
+			b, err := json.Marshal(params)
+			if err != nil {
+				return err
+			}
+			cacheMultistore = app.CommitMultiStore().CacheMultiStore()
+
+			cacheMultistore.GetKVStore(evmtypes.EVMStoreKey).Set([]byte{3}, b)
+
+			return nil
+		})
+
+		e.GET("/write", func(c echo.Context) error {
+			cacheMultistore.Write()
+			return nil
+		})
+
+		e.GET("/apphash", func(c echo.Context) error {
+			fmt.Println("LAST COMMIT HASH", commitMultistore.LastCommitID().Hash)
+			return nil
+		})
+
+		e.Start(":3000")
 	}()
 
 	return app, nil

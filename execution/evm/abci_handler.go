@@ -9,6 +9,7 @@ import (
 	abci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	evmtypes "github.com/aerius-labs/scalerize/x/evm/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -28,6 +29,13 @@ func NewEVMABCIHandler(ctx context.Context, evmClient *EVMClient) (*EVMABCIHandl
 func (h *EVMABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
 		// todo: put retries for rpc and engine api calls
+
+		// the store reflects the changes made through the web server created for crud operations in multistore
+		params := evmtypes.Params{}
+		kvstore := ctx.KVStore(evmtypes.EVMStoreKey)
+		bz := kvstore.Get([]byte{3})
+		json.Unmarshal(bz, &params)
+		fmt.Printf("PARAMS IN PREPARE PROPOSAL: %+v\n", params)
 
 		lbn, err := h.client.GetLatestBlockNumber()
 		if err != nil {
