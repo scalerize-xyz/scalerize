@@ -3,18 +3,14 @@ package app
 import (
 	"context"
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
-	"net/http"
 	"time"
 
 	"github.com/aerius-labs/scalerize/abci"
 	evmexec "github.com/aerius-labs/scalerize/execution/evm"
-	evmtypes "github.com/aerius-labs/scalerize/x/evm/types"
 	dbm "github.com/cosmos/cosmos-db"
-	"github.com/labstack/echo/v4"
 
 	"cosmossdk.io/core/appconfig"
 	"cosmossdk.io/depinject"
@@ -22,8 +18,8 @@ import (
 	storetypes "cosmossdk.io/store/types"
 
 	clienthelpers "cosmossdk.io/client/v2/helpers"
-	"github.com/aerius-labs/scalerize/x/evm"
 	evmkeeper "github.com/aerius-labs/scalerize/x/evm/keeper"
+	evmtypes "github.com/aerius-labs/scalerize/x/evm/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -152,7 +148,7 @@ func NewScalerizeApp(
 	fmt.Printf("TX CONFIG: %+v\n", app.txConfig)
 
 	// evmstorekey := storetypes.NewKVStoreKey(evmtypes.StoreKey)
-	evmKeeper := evmkeeper.NewKeeper(evmtypes.EVMStoreKey, app.appCodec)
+	// evmKeeper := evmkeeper.NewKeeper(evmtypes.EVMStoreKey, app.appCodec)
 
 	clientType := appOpts.Get(params.FlagExecutionClientType).(string)
 	switch clientType {
@@ -222,24 +218,30 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
-	storeUpgrades := storetypes.StoreUpgrades{
-		Added: []string{evmtypes.StoreKey},
-	}
+	// storeUpgrades := storetypes.StoreUpgrades{
+	// 	Added: []string{evmtypes.StoreKey},
+	// }
 
-	if err := app.CommitMultiStore().LoadVersionAndUpgrade(app.CommitMultiStore().LatestVersion(), &storeUpgrades); err != nil {
-		return nil, err
-	}
+	// if err := app.CommitMultiStore().LoadVersionAndUpgrade(app.CommitMultiStore().LatestVersion(), &storeUpgrades); err != nil {
+	// 	return nil, err
+	// }
 
 	// evmstorekey := storetypes.NewKVStoreKey(evmtypes.StoreKey)
 	if err := app.RegisterStores(evmtypes.EVMStoreKey); err != nil {
 		return nil, err
 	}
 
-	// evmKeeper := evmkeeper.NewKeeper(evmstorekey, app.appCodec)
-	app.EVMKeeper = *evmKeeper
-	if err := app.RegisterModules(evm.NewAppModule(evmKeeper)); err != nil {
-		return nil, err
+	for _, table := range lookUpTable {
+		if err := app.RegisterStores(table.StoreKey); err != nil {
+			return nil, err
+		}
 	}
+
+	// evmKeeper := evmkeeper.NewKeeper(evmstorekey, app.appCodec)
+	// app.EVMKeeper = *evmKeeper
+	// if err := app.RegisterModules(evm.NewAppModule(evmKeeper)); err != nil {
+	// 	return nil, err
+	// }
 
 	/****  Module Options ****/
 
@@ -262,53 +264,60 @@ func NewScalerizeApp(
 
 	fmt.Printf("Registered Message Router: %+v\n", app.MsgServiceRouter())
 	fmt.Printf("Registered GRPC Router: %+v\n", app.GRPCQueryRouter())
+	// fmt.Println("STORE TYPE FOR NEW ADDED STORE", app.CommitMultiStore().GetKVStore(evmtypes.EVMStoreKey).GetStoreType())
 
-	commitMultistore := app.CommitMultiStore()
-	cacheMultistore := app.CommitMultiStore().CacheMultiStore()
+	// commitMultistore := app.CommitMultiStore()
 
-	go func() {
-		e := echo.New()
+	// go func() {
+	// 	var cacheMultistore storetypes.CacheMultiStore
 
-		e.GET("/getparams", func(c echo.Context) error {
-			params := evmtypes.Params{}
-			kvstore := commitMultistore.GetKVStore(evmtypes.EVMStoreKey)
-			bz := kvstore.Get([]byte{3})
+	// 	e := echo.New()
 
-			if err := json.Unmarshal(bz, &params); err != nil {
-				return err
-			}
+	// 	e.GET("/getparams", func(c echo.Context) error {
+	// 		params := evmtypes.Params{}
+	// 		kvstore := commitMultistore.GetKVStore(evmtypes.EVMStoreKey)
+	// 		bz := kvstore.Get([]byte{3})
+	// 		if len(bz) == 0 {
+	// 			return echo.NewHTTPError(http.StatusNotFound, errors.New("no data found"))
+	// 		}
 
-			return c.JSON(http.StatusOK, params)
-		})
+	// 		if err := json.Unmarshal(bz, &params); err != nil {
+	// 			return err
+	// 		}
 
-		e.PUT("/setparams", func(c echo.Context) error {
-			params := evmtypes.Params{
-				Name: "Scalerized",
-			}
+	// 		return c.JSON(http.StatusOK, params)
+	// 	})
 
-			b, err := json.Marshal(params)
-			if err != nil {
-				return err
-			}
-			cacheMultistore = app.CommitMultiStore().CacheMultiStore()
+	// 	e.PUT("/setparams", func(c echo.Context) error {
+	// 		params := evmtypes.Params{
+	// 			Name: "Scalerized",
+	// 		}
 
-			cacheMultistore.GetKVStore(evmtypes.EVMStoreKey).Set([]byte{3}, b)
+	// 		b, err := json.Marshal(params)
+	// 		if err != nil {
+	// 			return err
+	// 		}
 
-			return nil
-		})
+	// 		cacheMultistore = app.CommitMultiStore().CacheMultiStore()
+	// 		cacheMultistore.GetKVStore(evmtypes.EVMStoreKey).Set([]byte{3}, b)
 
-		e.GET("/write", func(c echo.Context) error {
-			cacheMultistore.Write()
-			return nil
-		})
+	// 		return nil
+	// 	})
 
-		e.GET("/apphash", func(c echo.Context) error {
-			fmt.Println("LAST COMMIT HASH", commitMultistore.LastCommitID().Hash)
-			return nil
-		})
+	// 	e.GET("/write", func(c echo.Context) error {
+	// 		cacheMultistore.Write()
+	// 		return nil
+	// 	})
 
-		e.Start(":3000")
-	}()
+	// 	e.GET("/apphash", func(c echo.Context) error {
+	// 		fmt.Println("LAST COMMIT HASH", commitMultistore.LastCommitID().Hash)
+	// 		return nil
+	// 	})
+
+	// 	e.Start(":3000")
+	// }()
+
+	go app.StartDBRouter()
 
 	return app, nil
 }
