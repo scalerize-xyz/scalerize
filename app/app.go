@@ -58,8 +58,9 @@ var DefaultNodeHome string
 var AppConfigYAML []byte
 
 var (
-	_ runtime.AppI            = (*ScalerizeApp)(nil)
-	_ servertypes.Application = (*ScalerizeApp)(nil)
+	_          runtime.AppI            = (*ScalerizeApp)(nil)
+	_          servertypes.Application = (*ScalerizeApp)(nil)
+	socketPath string
 )
 
 // ScalerizeApp extends an ABCI application, but with most of its parameters exported.
@@ -146,6 +147,8 @@ func NewScalerizeApp(
 	}
 
 	fmt.Printf("TX CONFIG: %+v\n", app.txConfig)
+
+	socketPath = appOpts.Get(params.FlagSocketPath).(string)
 
 	// evmstorekey := storetypes.NewKVStoreKey(evmtypes.StoreKey)
 	// evmKeeper := evmkeeper.NewKeeper(evmtypes.EVMStoreKey, app.appCodec)
