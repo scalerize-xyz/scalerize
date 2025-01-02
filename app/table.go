@@ -9,6 +9,7 @@ const NumberOfTables uint8 = 3
 type TableInfo struct {
 	NoOfKeyBytes int
 	StoreKey     storetypes.StoreKey
+	IteratorsKey []byte
 }
 
 const (
@@ -18,20 +19,24 @@ const (
 	StoreHeaders
 	StoreBlockOmmers
 	StoreBlockWithdrawals
+
+	BytesForCanonicalHeadersKey           = 4
+	BytesForHeaderTerminalDifficultiesKey = 4
+	BytesForHeaderNumbersKey              = 4
 )
 
 var (
 	lookUpTable = [NumberOfTables]TableInfo{
 		{
-			NoOfKeyBytes: 1,
+			NoOfKeyBytes: BytesForCanonicalHeadersKey,
 			StoreKey:     storetypes.NewKVStoreKey("CanonicalHeaders"),
 		},
 		{
-			NoOfKeyBytes: 1,
+			NoOfKeyBytes: BytesForHeaderTerminalDifficultiesKey,
 			StoreKey:     storetypes.NewKVStoreKey("HeaderTerminalDifficulties"),
 		},
 		StoreHeaderNumbers: {
-			NoOfKeyBytes: 1,
+			NoOfKeyBytes: BytesForHeaderNumbersKey,
 			StoreKey:     storetypes.NewKVStoreKey("HeaderNumbers"),
 		},
 	}
