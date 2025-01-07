@@ -13,6 +13,10 @@ import (
 
 // todo: if we are not able to figure out the number of key bytes for a particular store
 // maybe they can vary, then we can send the number of key bytes in the request only
+
+// todo: if multiple cursor instances are being created in reth, then we can add a new field
+// in the reth implementation which stores the curr key for the cursor and send the curr key
+// with each request.
 const (
 	// DbTx and DbTxMut
 	OP_PUT    byte = 1
@@ -102,7 +106,7 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 			continue
 		}
 
-		fmt.Println("BUFFER: ", buffer)
+		// fmt.Println("BUFFER: ", buffer)
 
 		operation := buffer[0]
 		fmt.Println("OPERATION: ", operation)
@@ -110,14 +114,12 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 		storeNumber = uint8(buffer[1])
 		fmt.Println("STORE NUMBER: ", storeNumber)
 
-		key := buffer[2 : 2+lookUpTable[storeNumber].NoOfKeyBytes]
-		fmt.Println("KEY: ", key)
-
 		switch operation {
 		case OP_GET:
-			rwMutex.RLock()
+			key := buffer[2 : 2+lookUpTable[storeNumber].NoOfKeyBytes]
+			fmt.Println("KEY: ", key)
+
 			value, err := app.Get(storeNumber, key)
-			rwMutex.RUnlock()
 
 			if err != nil {
 				response = []byte{STATUS_ERROR}
@@ -128,12 +130,13 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 			}
 
 		case OP_PUT:
+			key := buffer[2 : 2+lookUpTable[storeNumber].NoOfKeyBytes]
+			fmt.Println("KEY: ", key)
+
 			value := buffer[2+lookUpTable[storeNumber].NoOfKeyBytes:]
 			fmt.Println("VALUE: ", value)
 
-			rwMutex.Lock()
 			err := app.Put(storeNumber, key, value)
-			rwMutex.Unlock()
 
 			if err != nil {
 				response = []byte{STATUS_ERROR}
@@ -144,9 +147,10 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 			}
 
 		case OP_DELETE:
-			rwMutex.Lock()
+			key := buffer[2 : 2+lookUpTable[storeNumber].NoOfKeyBytes]
+			fmt.Println("KEY: ", key)
+
 			err := app.Delete(storeNumber, key)
-			rwMutex.Unlock()
 
 			if err != nil {
 				response = []byte{STATUS_ERROR}
@@ -156,11 +160,84 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 			}
 
 		case OP_WRITE:
-			rwMutex.Lock()
 			app.Write()
-			rwMutex.Unlock()
 
 			response = []byte{STATUS_SUCCESS}
+
+		case OP_FIRST:
+			key, value, err := app.First(storeNumber)
+			if err != nil {
+				response = []byte{STATUS_ERROR}
+				response = append(response, []byte(err.Error())...)
+			} else {
+				response = []byte{STATUS_SUCCESS}
+				response = append(response, append(key, value...)...)
+			}
+
+		case OP_SEEK_EXACT:
+			key := buffer[2 : 2+lookUpTable[storeNumber].NoOfKeyBytes]
+			fmt.Println("KEY: ", key)
+			value, err := app.SeekExact(storeNumber, key)
+			if err != nil {
+				response = []byte{STATUS_ERROR}
+				response = append(response, []byte(err.Error())...)
+			} else {
+				response = []byte{STATUS_SUCCESS}
+				response = append(response, value...)
+			}
+
+		case OP_SEEK:
+			key := buffer[2 : 2+lookUpTable[storeNumber].NoOfKeyBytes]
+			fmt.Println("KEY: ", key)
+			value, err := app.Seek(storeNumber, key)
+			if err != nil {
+				response = []byte{STATUS_ERROR}
+				response = append(response, []byte(err.Error())...)
+			} else {
+				response = []byte{STATUS_SUCCESS}
+				response = append(response, value...)
+			}
+
+		case OP_NEXT:
+			key, value, err := app.Next(storeNumber)
+			if err != nil {
+				response = []byte{STATUS_ERROR}
+				response = append(response, []byte(err.Error())...)
+			} else {
+				response = []byte{STATUS_SUCCESS}
+				response = append(response, append(key, value...)...)
+			}
+
+		case OP_PREV:
+			key, value, err := app.Prev(storeNumber)
+			if err != nil {
+				response = []byte{STATUS_ERROR}
+				response = append(response, []byte(err.Error())...)
+			} else {
+				response = []byte{STATUS_SUCCESS}
+				response = append(response, append(key, value...)...)
+			}
+
+		case OP_LAST:
+			key, value, err := app.Last(storeNumber)
+			if err != nil {
+				response = []byte{STATUS_ERROR}
+				response = append(response, []byte(err.Error())...)
+			} else {
+				response = []byte{STATUS_SUCCESS}
+				response = append(response, append(key, value...)...)
+			}
+
+		case OP_CURRENT:
+			key, value, err := app.Current(storeNumber)
+			if err != nil {
+				response = []byte{STATUS_ERROR}
+				response = append(response, []byte(err.Error())...)
+			} else {
+				response = []byte{STATUS_SUCCESS}
+				response = append(response, append(key, value...)...)
+			}
+
 		default:
 			response = []byte{STATUS_ERROR}
 			response = append(response, []byte(ErrInvalidOperationCode.Error())...)
@@ -171,12 +248,18 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 }
 
 func (app *ScalerizeApp) Get(storeNumber uint8, key []byte) ([]byte, error) {
+	rwMutex.RLock()
+	defer rwMutex.RUnlock()
+
 	store, err := getTable(storeNumber)
 	if err != nil {
 		return nil, err
 	}
 
 	kvstore := app.CommitMultiStore().GetKVStore(store.StoreKey)
+
+	fmt.Println("STORE TYPE: ", app.CommitMultiStore().GetStore(store.StoreKey).GetStoreType())
+
 	value := kvstore.Get(key)
 	if len(value) == 0 {
 		return nil, ErrDataNotFound
@@ -186,6 +269,9 @@ func (app *ScalerizeApp) Get(storeNumber uint8, key []byte) ([]byte, error) {
 }
 
 func (app *ScalerizeApp) Put(storeNumber uint8, key []byte, value []byte) error {
+	rwMutex.Lock()
+	defer rwMutex.Unlock()
+
 	store, err := getTable(storeNumber)
 	if err != nil {
 		return err
@@ -199,6 +285,9 @@ func (app *ScalerizeApp) Put(storeNumber uint8, key []byte, value []byte) error 
 }
 
 func (app *ScalerizeApp) Delete(storeNumber uint8, key []byte) error {
+	rwMutex.Lock()
+	defer rwMutex.Unlock()
+
 	store, err := getTable(storeNumber)
 	if err != nil {
 		return err
@@ -210,6 +299,9 @@ func (app *ScalerizeApp) Delete(storeNumber uint8, key []byte) error {
 }
 
 func (app *ScalerizeApp) Write() {
+	rwMutex.Lock()
+	defer rwMutex.Unlock()
+
 	cacheMultistore.Write()
 	cacheMultistore = app.CommitMultiStore().CacheMultiStore()
 
@@ -297,6 +389,11 @@ func (app *ScalerizeApp) Write() {
 
 // first gets the first entry in the table and sets the cursor to that key
 func (app *ScalerizeApp) First(storeNumber uint8) ([]byte, []byte, error) {
+	rwMutex.RLock()
+	defer rwMutex.RUnlock()
+
+	fmt.Println("ITERATOR POSITION BEFORE FIRST: ", lookUpTable[storeNumber].IteratorsKey)
+
 	store, err := getTable(storeNumber)
 	if err != nil {
 		return nil, nil, err
@@ -311,12 +408,19 @@ func (app *ScalerizeApp) First(storeNumber uint8) ([]byte, []byte, error) {
 
 	lookUpTable[storeNumber].IteratorsKey = iterator.Key()
 
+	fmt.Println("ITERATOR POSITION AFTER FIRST: ", lookUpTable[storeNumber].IteratorsKey)
+
 	return iterator.Key(), iterator.Value(), nil
 }
 
 // seek exact (sets the key to cursor to the exact key and return the key value pair)
 // or (just sets the iterator to the next greater one)
 func (app *ScalerizeApp) SeekExact(storeNumber uint8, key []byte) ([]byte, error) {
+	rwMutex.RLock()
+	defer rwMutex.RUnlock()
+
+	fmt.Println("ITERATOR POSITION BEFORE SEEK_EXACT: ", lookUpTable[storeNumber].IteratorsKey)
+
 	store, err := getTable(storeNumber)
 	if err != nil {
 		return nil, err
@@ -332,6 +436,8 @@ func (app *ScalerizeApp) SeekExact(storeNumber uint8, key []byte) ([]byte, error
 
 	lookUpTable[storeNumber].IteratorsKey = iterator.Key()
 
+	fmt.Println("ITERATOR POSITION AFTER SEEK_EXACT: ", lookUpTable[storeNumber].IteratorsKey)
+
 	if !bytes.Equal(key, iterator.Key()) {
 		return nil, ErrKeyNotExists
 	}
@@ -341,6 +447,11 @@ func (app *ScalerizeApp) SeekExact(storeNumber uint8, key []byte) ([]byte, error
 
 // seek (sets the key to cursor to the (exact or next greater key) and return the key value pair)
 func (app *ScalerizeApp) Seek(storeNumber uint8, key []byte) ([]byte, error) {
+	rwMutex.RLock()
+	defer rwMutex.RUnlock()
+
+	fmt.Println("ITERATOR POSITION BEFORE SEEK: ", lookUpTable[storeNumber].IteratorsKey)
+
 	store, err := getTable(storeNumber)
 	if err != nil {
 		return nil, err
@@ -355,12 +466,19 @@ func (app *ScalerizeApp) Seek(storeNumber uint8, key []byte) ([]byte, error) {
 
 	lookUpTable[storeNumber].IteratorsKey = iterator.Key()
 
+	fmt.Println("ITERATOR POSITION AFTER SEEK: ", lookUpTable[storeNumber].IteratorsKey)
+
 	return iterator.Value(), nil
 }
 
 // next returns the next from the current entry in the table, but if
 // current key is not set of the cursor then first entry is returned
 func (app *ScalerizeApp) Next(storeNumber uint8) ([]byte, []byte, error) {
+	rwMutex.RLock()
+	defer rwMutex.RUnlock()
+
+	fmt.Println("ITERATOR POSITION BEFORE NEXT: ", lookUpTable[storeNumber].IteratorsKey)
+
 	store, err := getTable(storeNumber)
 	if err != nil {
 		return nil, nil, err
@@ -379,10 +497,12 @@ func (app *ScalerizeApp) Next(storeNumber uint8) ([]byte, []byte, error) {
 
 	iterator.Next()
 	if !iterator.Valid() {
-		return nil, nil, ErrCannotIteratePrevOrNextWhenCurrentKeyIsOnlyEntry
+		return nil, nil, ErrCannotIterateToNextFromLast
 	}
 
 	lookUpTable[storeNumber].IteratorsKey = iterator.Key()
+
+	fmt.Println("ITERATOR POSITION AFTER NEXT: ", lookUpTable[storeNumber].IteratorsKey)
 
 	return iterator.Key(), iterator.Value(), nil
 }
@@ -390,6 +510,11 @@ func (app *ScalerizeApp) Next(storeNumber uint8) ([]byte, []byte, error) {
 // prev returns the previous from the current entry of the table but if
 // current key is not set then the last entry is returned
 func (app *ScalerizeApp) Prev(storeNumber uint8) ([]byte, []byte, error) {
+	rwMutex.RLock()
+	defer rwMutex.RUnlock()
+
+	fmt.Println("ITERATOR POSITION BEFORE PREV: ", lookUpTable[storeNumber].IteratorsKey)
+
 	store, err := getTable(storeNumber)
 	if err != nil {
 		return nil, nil, err
@@ -399,20 +524,27 @@ func (app *ScalerizeApp) Prev(storeNumber uint8) ([]byte, []byte, error) {
 		return app.Last(storeNumber)
 	}
 
-	iterator := app.CommitMultiStore().GetCommitKVStore(store.StoreKey).Iterator(nil, store.IteratorsKey)
+	iterator := app.CommitMultiStore().GetCommitKVStore(store.StoreKey).ReverseIterator(nil, store.IteratorsKey)
 	defer iterator.Close()
 
 	if !iterator.Valid() {
-		return nil, nil, ErrCannotIteratePrevOrNextWhenCurrentKeyIsOnlyEntry
+		return nil, nil, ErrCannotIterateToPrevFromFirst
 	}
 
 	lookUpTable[storeNumber].IteratorsKey = iterator.Key()
+
+	fmt.Println("ITERATOR POSITION AFTER PREV: ", lookUpTable[storeNumber].IteratorsKey)
 
 	return iterator.Key(), iterator.Value(), nil
 }
 
 // last gets the last entry in the table and sets the cursor to that key
 func (app *ScalerizeApp) Last(storeNumber uint8) ([]byte, []byte, error) {
+	rwMutex.RLock()
+	defer rwMutex.RUnlock()
+
+	fmt.Println("ITERATOR POSITION BEFORE LAST: ", lookUpTable[storeNumber].IteratorsKey)
+
 	store, err := getTable(storeNumber)
 	if err != nil {
 		return nil, nil, err
@@ -427,10 +559,17 @@ func (app *ScalerizeApp) Last(storeNumber uint8) ([]byte, []byte, error) {
 
 	lookUpTable[storeNumber].IteratorsKey = iterator.Key()
 
+	fmt.Println("ITERATOR POSITION AFTER LAST: ", lookUpTable[storeNumber].IteratorsKey)
+
 	return iterator.Key(), iterator.Value(), nil
 }
 
 func (app *ScalerizeApp) Current(storeNumber uint8) ([]byte, []byte, error) {
+	rwMutex.RLock()
+	defer rwMutex.RUnlock()
+
+	fmt.Println("ITERATOR POSITION BEFORE CURRENT: ", lookUpTable[storeNumber].IteratorsKey)
+
 	store, err := getTable(storeNumber)
 	if err != nil {
 		return nil, nil, err
@@ -447,11 +586,13 @@ func (app *ScalerizeApp) Current(storeNumber uint8) ([]byte, []byte, error) {
 		return nil, nil, ErrKeyNotExists
 	}
 
+	fmt.Println("ITERATOR POSITION AFTER CURRENT: ", lookUpTable[storeNumber].IteratorsKey)
+
 	return iterator.Key(), iterator.Value(), nil
 }
 
 func (app *ScalerizeApp) writeToConn(conn net.Conn, response []byte) {
-	fmt.Println("SENDING RESPONSE:", response)
+	// fmt.Println("SENDING RESPONSE:", response)
 	if _, err := conn.Write(response); err != nil {
 		app.Logger().Error(err.Error())
 	}
