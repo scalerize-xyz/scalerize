@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/aerius-labs/scalerize/abci"
@@ -83,6 +84,10 @@ type ScalerizeApp struct {
 
 	// simulation manager
 	sm *module.SimulationManager
+
+	executionDBStoreKeys     map[string]storetypes.StoreKey
+	executionCacheMultistore storetypes.CacheMultiStore
+	rwMutex                  sync.RWMutex
 }
 
 func init() {
@@ -123,6 +128,8 @@ func NewScalerizeApp(
 		abciHandler abci.ABCIHandler
 		ctx         = context.Background()
 	)
+
+	app.executionDBStoreKeys = make(map[string]storetypes.StoreKey)
 
 	if err := depinject.Inject(
 		depinject.Configs(
@@ -234,11 +241,11 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
-	for _, table := range lookUpTable {
-		if err := app.RegisterStores(table.StoreKey); err != nil {
-			return nil, err
-		}
-	}
+	// for _, table := range lookUpTable {
+	// 	if err := app.RegisterStores(table.StoreKey); err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 
 	// evmKeeper := evmkeeper.NewKeeper(evmstorekey, app.appCodec)
 	// app.EVMKeeper = *evmKeeper
