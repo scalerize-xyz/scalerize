@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
@@ -124,13 +125,9 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
 				}
-				storeName := string(buffer[2 : 2+HashedAccountsKeyBytes])
-				if _, ok := app.executionDBStoreKeys[storeName]; !ok {
-					response = append([]byte{STATUS_ERROR}, []byte(ErrStoreNotFound.Error())...)
-					break
-				}
 
-				value, err := app.Get(false, storeName, HashedAccountDataKey)
+				storeName := string(buffer[2 : 2+HashedAccountsKeyBytes])
+				value, err := app.Get(false, storeName, HashedAccountDataKey[:])
 				if err != nil {
 					response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
 					break
@@ -146,62 +143,40 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 				}
 
 				storeName := string(buffer[2 : 2+HashedStoragesKeyBytes])
-				storeKey, ok := app.executionDBStoreKeys[storeName]
-				if !ok {
-					response = append([]byte{STATUS_ERROR}, []byte(ErrStoreNotFound.Error())...)
+				value, err := app.Get(true, storeName, nil)
+				if err != nil {
+					response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
 					break
 				}
 
-				app.Get(true, storeName, nil)
-
-				func() {
-					app.rwMutex.RLock()
-					defer app.rwMutex.RUnlock()
-
-					iterator := app.CommitMultiStore().GetKVStore(storeKey).Iterator(nil, nil)
-					defer iterator.Close()
-
-					if !iterator.Valid() {
-						response = append([]byte{STATUS_ERROR}, []byte(ErrTableIsEmpty.Error())...)
-						return
-					}
-
-					key := iterator.Key()
-					if bytes.Equal(key, HashedAccountDataKey) {
-						response = append([]byte{STATUS_ERROR}, []byte(ErrTableIsEmpty.Error())...)
-						return
-					}
-
-					value := iterator.Value()
-					if len(value) == 0 {
-						response = append([]byte{STATUS_ERROR}, []byte(ErrDataNotFound.Error())...)
-						return
-					}
-
-					response = append([]byte{STATUS_SUCCESS}, value...)
-				}()
+				response = append([]byte{STATUS_SUCCESS}, value...)
 
 			default:
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidTableCode.Error())...)
 			}
 
 		case OP_PUT:
+			// for PUT request 3rd and 4th bytes are used to know bytes taken by value
+			value_len := binary.BigEndian.Uint16(buffer[2:4])
+			fmt.Println("VALUE LEN: ", value_len)
+
 			switch tableCode {
 			case HashedAccountsTableCode:
-				if len(buffer) < 2+HashedAccountsKeyBytes {
+
+				if len(buffer) < 4+HashedAccountsKeyBytes {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
 				}
 
-				storeName := string(buffer[2 : 2+HashedAccountsKeyBytes])
+				storeName := string(buffer[4 : 4+HashedAccountsKeyBytes])
 				if _, ok := app.executionDBStoreKeys[storeName]; !ok {
 					if response = app.createAndAddStoreKey(storeName); response != nil {
 						break
 					}
 				}
 
-				value := buffer[2+HashedAccountsKeyBytes:]
-				if err := app.Put(storeName, HashedAccountDataKey, value); err != nil {
+				value := buffer[4+HashedAccountsKeyBytes : 4+HashedAccountsKeyBytes+value_len]
+				if err := app.Put(storeName, HashedAccountDataKey[:], value); err != nil {
 					response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
 					break
 				}
@@ -209,19 +184,19 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 				response = append([]byte{STATUS_SUCCESS}, []byte(value)...)
 
 			case HashedStoragesTableCode:
-				if len(buffer) < 2+HashedStoragesKeyBytes+HashedStoragesSubKeyBytes {
+				if len(buffer) < 4+HashedStoragesKeyBytes+HashedStoragesSubKeyBytes {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
 				}
 
-				storeName := string(buffer[2 : 2+HashedStoragesKeyBytes])
+				storeName := string(buffer[4 : 4+HashedStoragesKeyBytes])
 				if _, ok := app.executionDBStoreKeys[string(storeName)]; !ok {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrStoreNotFound.Error())...)
 					break
 				}
 
-				subkey := buffer[2+HashedStoragesKeyBytes : 2+HashedStoragesKeyBytes+HashedStoragesSubKeyBytes]
-				value := buffer[2+HashedStoragesKeyBytes+HashedStoragesSubKeyBytes:]
+				subkey := buffer[4+HashedStoragesKeyBytes : 4+HashedStoragesKeyBytes+HashedStoragesSubKeyBytes]
+				value := buffer[4+HashedStoragesKeyBytes+HashedStoragesSubKeyBytes : 4+HashedStoragesKeyBytes+HashedStoragesSubKeyBytes+value_len]
 				if err := app.Put(storeName, subkey, value); err != nil {
 					response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
 					break
@@ -234,20 +209,64 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 			}
 
 		case OP_DELETE:
+			// for DELETE request 3rd and 4th bytes are used to know bytes taken by value. If 0 it means value is not specified
+			// subkey is not needed in the request
+			// for HashedAccountsTable in delete request the whole substore needs to be deleted for the account address (for now I am deleting all entries)
+			// for HashedStorages in delete request if:
+			// - key and value both are specified: only that entry is deleted
+			// - only key is specified: all entries except entry for account data is remained
+			value_len := binary.BigEndian.Uint16(buffer[2:4])
+			fmt.Println("VALUE LEN: ", value_len)
+
 			switch tableCode {
 			case HashedAccountsTableCode:
-				if len(buffer) < 2+HashedAccountsKeyBytes {
+				if len(buffer) < 4+HashedAccountsKeyBytes {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
 				}
 
-				storeName := string(buffer[2 : 2+HashedAccountsKeyBytes])
+				storeName := string(buffer[4 : 4+HashedAccountsKeyBytes])
 				if _, ok := app.executionDBStoreKeys[storeName]; !ok {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrStoreNotFound.Error())...)
 					break
 				}
+
+				if err := app.Delete(false, storeName, nil); err != nil {
+					response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+					break
+				}
+
+				response = []byte{STATUS_SUCCESS}
+
 			case HashedStoragesTableCode:
+				if len(buffer) < 4+HashedStoragesKeyBytes {
+					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+					break
+				}
+
+				storeName := string(buffer[4 : 4+HashedStoragesKeyBytes])
+				if _, ok := app.executionDBStoreKeys[storeName]; !ok {
+					if response = app.createAndAddStoreKey(storeName); response != nil {
+						break
+					}
+				}
+
+				var value []byte
+				if value_len == 0 {
+					value = nil
+				} else {
+					value = buffer[4+HashedStoragesKeyBytes : 4+HashedStoragesKeyBytes+value_len]
+				}
+
+				if err := app.Delete(true, storeName, value); err != nil {
+					response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+					break
+				}
+
+				response = []byte{STATUS_SUCCESS}
+
 			default:
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidTableCode.Error())...)
 			}
 			// key := buffer[2 : 2+lookUpTable[storeNumber].NoOfKeyBytes]
 			// fmt.Println("KEY: ", key)
@@ -368,7 +387,7 @@ func (app *ScalerizeApp) Get(dupSortedTable bool, storeName string, key []byte) 
 		}
 
 		k := iterator.Key()
-		if bytes.Equal(k, HashedAccountDataKey) {
+		if bytes.Equal(k, HashedAccountDataKey[:]) {
 			return nil, ErrTableIsEmpty
 		}
 
@@ -376,6 +395,12 @@ func (app *ScalerizeApp) Get(dupSortedTable bool, storeName string, key []byte) 
 		if len(value) == 0 {
 			return nil, ErrDataNotFound
 		}
+
+		// for ; iterator.Valid(); iterator.Next() {
+		// 	key := iterator.Key()
+		// 	value := iterator.Value()
+		// 	fmt.Printf("Key: %x, Value: %x\n", key, value)
+		// }
 
 		return value, nil
 	}
@@ -397,22 +422,46 @@ func (app *ScalerizeApp) Put(storeName string, key []byte, value []byte) error {
 		return ErrStoreNotFound
 	}
 
-	fmt.Println("PUTTING KEY: %v and VALUE: %v\n", key, value)
 	app.executionCacheMultistore.GetKVStore(storeKey).Set(key, value)
 
 	return nil
 }
 
-func (app *ScalerizeApp) Delete(storeNumber uint8, key []byte) error {
+func (app *ScalerizeApp) Delete(dupSortedTable bool, storeName string, value []byte) error {
 	app.rwMutex.Lock()
 	defer app.rwMutex.Unlock()
 
-	store, err := getTable(storeNumber)
-	if err != nil {
-		return err
+	storeKey, ok := app.executionDBStoreKeys[storeName]
+	if !ok {
+		return ErrStoreNotFound
 	}
 
-	app.executionCacheMultistore.GetKVStore(store.StoreKey).Delete(key)
+	store := app.executionCacheMultistore.GetKVStore(storeKey)
+	iterator := store.Iterator(nil, nil)
+	defer iterator.Close()
+
+	if dupSortedTable {
+		if value == nil {
+			for ; iterator.Valid() && !bytes.Equal(iterator.Key(), HashedAccountDataKey[:]); iterator.Next() {
+				k := iterator.Key()
+				store.Delete(k)
+			}
+
+			return nil
+		}
+
+		for ; iterator.Valid(); iterator.Next() {
+			if bytes.Equal(iterator.Value(), value) {
+				store.Delete(iterator.Key())
+				return nil
+			}
+		}
+	}
+
+	for ; iterator.Valid(); iterator.Next() {
+		k := iterator.Key()
+		store.Delete(k)
+	}
 
 	return nil
 }
@@ -660,12 +709,23 @@ func (app *ScalerizeApp) writeToConn(conn net.Conn, response []byte) {
 // func getStoreKey(tableCode uint8)
 func (app *ScalerizeApp) createAndAddStoreKey(storeName string) (errResponse []byte) {
 	storeKey := storetypes.NewKVStoreKey(storeName)
+
 	if err := app.RegisterStores(storeKey); err != nil {
 		errResponse = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
 		return
 	}
 
+	storeUpgrades := storetypes.StoreUpgrades{
+		Added: []string{storeKey.Name()},
+	}
+
+	if err := app.CommitMultiStore().LoadVersionAndUpgrade(app.CommitMultiStore().LatestVersion(), &storeUpgrades); err != nil {
+		errResponse = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+		return
+	}
+
 	app.executionDBStoreKeys[storeName] = storeKey
+	app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
 
 	return nil
 }

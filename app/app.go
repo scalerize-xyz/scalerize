@@ -247,6 +247,16 @@ func NewScalerizeApp(
 	// 	}
 	// }
 
+	// storeKey := storetypes.NewKVStoreKey("x")
+
+	// if err := app.RegisterStores(storeKey); err != nil {
+	// 	fmt.Println("ERR2: ", err)
+	// 	// errResponse = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+	// 	// return
+	// }
+
+	// app.executionDBStoreKeys["x"] = storeKey
+
 	// evmKeeper := evmkeeper.NewKeeper(evmstorekey, app.appCodec)
 	// app.EVMKeeper = *evmKeeper
 	// if err := app.RegisterModules(evm.NewAppModule(evmKeeper)); err != nil {
