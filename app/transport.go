@@ -1,8 +1,6 @@
 package app
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
@@ -45,11 +43,12 @@ const (
 	STATUS_ERROR   byte = 0
 )
 
-var (
-	// just for testing iterator functionality
-	startKey      = []byte{1, 2, 3, 4}
-	invalidEndKey = []byte{0, 2, 3, 4}
-)
+// var (
+// just for testing iterator functionality
+// 	startKey      = []byte{1, 2, 3, 4}
+// 	invalidEndKey = []byte{0, 2, 3, 4}
+// 	sks           = []storetypes.StoreKey{}
+// )
 
 func (app *ScalerizeApp) StartDBRouter() {
 	os.Remove(socketPath)
@@ -109,176 +108,109 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 			continue
 		}
 
+		data := buffer[:n]
+
 		// fmt.Println("BUFFER: ", buffer)
 
-		operation := buffer[0]
+		operation := data[0]
 		fmt.Println("OPERATION: ", operation)
 
-		tableCode = uint8(buffer[1])
+		tableCode = uint8(data[1])
 		fmt.Println("TABLE CODE: ", tableCode)
+
+		if _, ok := ethExecutionTableInfo[tableCode]; !ok {
+			response = append([]byte{STATUS_ERROR}, []byte(ErrStoreNotFound.Error())...)
+			app.writeToConn(conn, response)
+			continue
+		}
 
 		switch operation {
 		case OP_GET:
-			switch tableCode {
-			case HashedAccountsTableCode:
-				if len(buffer) < 2+HashedAccountsKeyBytes {
-					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
-					break
-				}
 
-				storeName := string(buffer[2 : 2+HashedAccountsKeyBytes])
-				value, err := app.Get(false, storeName, HashedAccountDataKey[:])
-				if err != nil {
-					response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
-					break
-				}
+			fmt.Println("GET REQUEST LEN: ", len(data))
 
-				response = append([]byte{STATUS_SUCCESS}, value...)
+			var key []byte
 
-			// when get is called for DupSortedTables, the first key-value pair in the sorted table is returned
-			case HashedStoragesTableCode:
-				if len(buffer) < 2+HashedStoragesKeyBytes {
-					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
-					break
-				}
-
-				storeName := string(buffer[2 : 2+HashedStoragesKeyBytes])
-				value, err := app.Get(true, storeName, nil)
-				if err != nil {
-					response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
-					break
-				}
-
-				response = append([]byte{STATUS_SUCCESS}, value...)
-
-			default:
-				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidTableCode.Error())...)
+			table := app.executionTablesInfo[tableCode]
+			if len(data) != 2+table.KeyBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
 			}
+
+			key = data[2 : 2+table.KeyBytes]
+
+			value, err := app.Get(tableCode, key)
+			if err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+				break
+			}
+
+			response = append([]byte{STATUS_SUCCESS}, value...)
 
 		case OP_PUT:
-			// for PUT request 3rd and 4th bytes are used to know bytes taken by value
-			value_len := binary.BigEndian.Uint16(buffer[2:4])
-			fmt.Println("VALUE LEN: ", value_len)
+			var (
+				key   []byte
+				value []byte
+			)
 
-			switch tableCode {
-			case HashedAccountsTableCode:
+			table := app.executionTablesInfo[tableCode]
 
-				if len(buffer) < 4+HashedAccountsKeyBytes {
+			if table.DupSorted {
+				if len(data) <= 2+table.KeyBytes+table.SubKeyBytes {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
 				}
 
-				storeName := string(buffer[4 : 4+HashedAccountsKeyBytes])
-				if _, ok := app.executionDBStoreKeys[storeName]; !ok {
-					if response = app.createAndAddStoreKey(storeName); response != nil {
-						break
-					}
-				}
-
-				value := buffer[4+HashedAccountsKeyBytes : 4+HashedAccountsKeyBytes+value_len]
-				if err := app.Put(storeName, HashedAccountDataKey[:], value); err != nil {
-					response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
-					break
-				}
-
-				response = append([]byte{STATUS_SUCCESS}, []byte(value)...)
-
-			case HashedStoragesTableCode:
-				if len(buffer) < 4+HashedStoragesKeyBytes+HashedStoragesSubKeyBytes {
+				key = data[2 : 2+table.KeyBytes+table.SubKeyBytes]
+				value = data[2+table.KeyBytes+table.SubKeyBytes:]
+			} else {
+				if len(data) <= 2+table.KeyBytes {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
 				}
 
-				storeName := string(buffer[4 : 4+HashedStoragesKeyBytes])
-				if _, ok := app.executionDBStoreKeys[string(storeName)]; !ok {
-					response = append([]byte{STATUS_ERROR}, []byte(ErrStoreNotFound.Error())...)
-					break
-				}
-
-				subkey := buffer[4+HashedStoragesKeyBytes : 4+HashedStoragesKeyBytes+HashedStoragesSubKeyBytes]
-				value := buffer[4+HashedStoragesKeyBytes+HashedStoragesSubKeyBytes : 4+HashedStoragesKeyBytes+HashedStoragesSubKeyBytes+value_len]
-				if err := app.Put(storeName, subkey, value); err != nil {
-					response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
-					break
-				}
-
-				response = append([]byte{STATUS_SUCCESS}, []byte(value)...)
-
-			default:
-				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidTableCode.Error())...)
+				key = data[2 : 2+table.KeyBytes]
+				value = data[2+table.KeyBytes:]
 			}
+
+			if err := app.Put(tableCode, key, value); err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+				break
+			}
+
+			response = append([]byte{STATUS_SUCCESS}, value...)
 
 		case OP_DELETE:
-			// for DELETE request 3rd and 4th bytes are used to know bytes taken by value. If 0 it means value is not specified
-			// subkey is not needed in the request
-			// for HashedAccountsTable in delete request the whole substore needs to be deleted for the account address (for now I am deleting all entries)
-			// for HashedStorages in delete request if:
+			// for DupSorted Table in delete request if:
 			// - key and value both are specified: only that entry is deleted
-			// - only key is specified: all entries except entry for account data is remained
-			value_len := binary.BigEndian.Uint16(buffer[2:4])
-			fmt.Println("VALUE LEN: ", value_len)
+			// - only key is specified: all entries for that key is deleted
 
-			switch tableCode {
-			case HashedAccountsTableCode:
-				if len(buffer) < 4+HashedAccountsKeyBytes {
-					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
-					break
-				}
+			fmt.Println("DELETE REQUEST LEN: ", len(data))
+			var (
+				key               []byte
+				keyIncludesSubkey bool
+			)
 
-				storeName := string(buffer[4 : 4+HashedAccountsKeyBytes])
-				if _, ok := app.executionDBStoreKeys[storeName]; !ok {
-					response = append([]byte{STATUS_ERROR}, []byte(ErrStoreNotFound.Error())...)
-					break
-				}
+			table := app.executionTablesInfo[tableCode]
 
-				if err := app.Delete(false, storeName, nil); err != nil {
-					response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
-					break
-				}
-
-				response = []byte{STATUS_SUCCESS}
-
-			case HashedStoragesTableCode:
-				if len(buffer) < 4+HashedStoragesKeyBytes {
-					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
-					break
-				}
-
-				storeName := string(buffer[4 : 4+HashedStoragesKeyBytes])
-				if _, ok := app.executionDBStoreKeys[storeName]; !ok {
-					if response = app.createAndAddStoreKey(storeName); response != nil {
-						break
-					}
-				}
-
-				var value []byte
-				if value_len == 0 {
-					value = nil
-				} else {
-					value = buffer[4+HashedStoragesKeyBytes : 4+HashedStoragesKeyBytes+value_len]
-				}
-
-				if err := app.Delete(true, storeName, value); err != nil {
-					response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
-					break
-				}
-
-				response = []byte{STATUS_SUCCESS}
-
-			default:
-				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidTableCode.Error())...)
+			if (!table.DupSorted && len(data) != 2+table.KeyBytes) ||
+				(table.DupSorted && len(data) != 2+table.KeyBytes && len(data) != 2+table.KeyBytes+table.SubKeyBytes) {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
 			}
-			// key := buffer[2 : 2+lookUpTable[storeNumber].NoOfKeyBytes]
-			// fmt.Println("KEY: ", key)
 
-			// err := app.Delete(storeNumber, key)
+			if table.DupSorted && len(data) == 2+table.KeyBytes+table.SubKeyBytes {
+				keyIncludesSubkey = true
+			}
 
-			// if err != nil {
-			// 	response = []byte{STATUS_ERROR}
-			// 	response = append(response, []byte(err.Error())...)
-			// } else {
-			// 	response = []byte{STATUS_SUCCESS}
-			// }
+			key = data[2:]
+
+			if err := app.Delete(tableCode, key, keyIncludesSubkey); err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+				break
+			}
+
+			response = []byte{STATUS_SUCCESS}
 
 		case OP_WRITE:
 			app.Write()
@@ -367,101 +299,77 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 	}
 }
 
-func (app *ScalerizeApp) Get(dupSortedTable bool, storeName string, key []byte) ([]byte, error) {
+func (app *ScalerizeApp) Get(tableCode uint8, key []byte) ([]byte, error) {
 	app.rwMutex.RLock()
 	defer app.rwMutex.RUnlock()
 
-	storeKey, ok := app.executionDBStoreKeys[storeName]
+	table, ok := app.executionTablesInfo[tableCode]
 	if !ok {
 		return nil, ErrStoreNotFound
 	}
 
-	// when get is called for DupSortedTables, the first key-value pair in the sorted table is returned
-	// key
-	if dupSortedTable {
-		iterator := app.CommitMultiStore().GetKVStore(storeKey).Iterator(nil, nil)
+	if table.DupSorted {
+		iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(key, storetypes.PrefixEndBytes(key))
 		defer iterator.Close()
 
 		if !iterator.Valid() {
-			return nil, ErrTableIsEmpty
-		}
-
-		k := iterator.Key()
-		if bytes.Equal(k, HashedAccountDataKey[:]) {
-			return nil, ErrTableIsEmpty
-		}
-
-		value := iterator.Value()
-		if len(value) == 0 {
 			return nil, ErrDataNotFound
 		}
 
-		// for ; iterator.Valid(); iterator.Next() {
-		// 	key := iterator.Key()
-		// 	value := iterator.Value()
-		// 	fmt.Printf("Key: %x, Value: %x\n", key, value)
-		// }
-
-		return value, nil
+		return iterator.Value(), nil
 	}
 
-	value := app.CommitMultiStore().GetKVStore(storeKey).Get(key)
-	if len(value) == 0 {
+	if !app.CommitMultiStore().GetKVStore(table.StoreKey).Has(key) {
 		return nil, ErrDataNotFound
 	}
 
-	return value, nil
+	return app.CommitMultiStore().GetKVStore(table.StoreKey).Get(key), nil
 }
 
-func (app *ScalerizeApp) Put(storeName string, key []byte, value []byte) error {
+func (app *ScalerizeApp) Put(tableCode uint8, key []byte, value []byte) error {
 	app.rwMutex.Lock()
 	defer app.rwMutex.Unlock()
 
-	storeKey, ok := app.executionDBStoreKeys[storeName]
+	table, ok := app.executionTablesInfo[tableCode]
 	if !ok {
 		return ErrStoreNotFound
 	}
 
-	app.executionCacheMultistore.GetKVStore(storeKey).Set(key, value)
+	app.executionCacheMultistore.GetKVStore(table.StoreKey).Set(key, value)
 
 	return nil
 }
 
-func (app *ScalerizeApp) Delete(dupSortedTable bool, storeName string, value []byte) error {
+func (app *ScalerizeApp) Delete(tableCode uint8, key []byte, keyIncludesSubkey bool) error {
 	app.rwMutex.Lock()
 	defer app.rwMutex.Unlock()
 
-	storeKey, ok := app.executionDBStoreKeys[storeName]
+	table, ok := app.executionTablesInfo[tableCode]
 	if !ok {
 		return ErrStoreNotFound
 	}
 
-	store := app.executionCacheMultistore.GetKVStore(storeKey)
-	iterator := store.Iterator(nil, nil)
-	defer iterator.Close()
+	store := app.executionCacheMultistore.GetKVStore(table.StoreKey)
 
-	if dupSortedTable {
-		if value == nil {
-			for ; iterator.Valid() && !bytes.Equal(iterator.Key(), HashedAccountDataKey[:]); iterator.Next() {
-				k := iterator.Key()
-				store.Delete(k)
-			}
-
+	if table.DupSorted {
+		if keyIncludesSubkey {
+			store.Delete(key)
 			return nil
 		}
 
+		iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(key, storetypes.PrefixEndBytes(key))
+		defer iterator.Close()
+		fmt.Println("KEY: ", key)
+
 		for ; iterator.Valid(); iterator.Next() {
-			if bytes.Equal(iterator.Value(), value) {
-				store.Delete(iterator.Key())
-				return nil
-			}
+			fmt.Println("DELETE KEY: ", iterator.Key())
+			store.Delete(iterator.Key())
 		}
+
+		return nil
 	}
 
-	for ; iterator.Valid(); iterator.Next() {
-		k := iterator.Key()
-		store.Delete(k)
-	}
+	store.Delete(key)
 
 	return nil
 }
@@ -474,7 +382,7 @@ func (app *ScalerizeApp) Write() {
 	app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
 }
 
-// // first gets the first entry in the table and sets the cursor to that key
+// first gets the first entry in the table and sets the cursor to that key
 // func (app *ScalerizeApp) First(storeName string) ([]byte, []byte, error) {
 // 	app.rwMutex.RLock()
 // 	defer app.rwMutex.RUnlock()
@@ -692,40 +600,7 @@ func (app *ScalerizeApp) Write() {
 // }
 
 func (app *ScalerizeApp) writeToConn(conn net.Conn, response []byte) {
-	// fmt.Println("SENDING RESPONSE:", response)
 	if _, err := conn.Write(response); err != nil {
 		app.Logger().Error(err.Error())
 	}
-}
-
-// func getTable(storeNumber uint8) (*TableInfo, error) {
-// 	if storeNumber >= NumberOfTables {
-// 		return nil, ErrStoreNotFound
-// 	}
-
-// 	return &lookUpTable[storeNumber], nil
-// }
-
-// func getStoreKey(tableCode uint8)
-func (app *ScalerizeApp) createAndAddStoreKey(storeName string) (errResponse []byte) {
-	storeKey := storetypes.NewKVStoreKey(storeName)
-
-	if err := app.RegisterStores(storeKey); err != nil {
-		errResponse = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
-		return
-	}
-
-	storeUpgrades := storetypes.StoreUpgrades{
-		Added: []string{storeKey.Name()},
-	}
-
-	if err := app.CommitMultiStore().LoadVersionAndUpgrade(app.CommitMultiStore().LatestVersion(), &storeUpgrades); err != nil {
-		errResponse = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
-		return
-	}
-
-	app.executionDBStoreKeys[storeName] = storeKey
-	app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
-
-	return nil
 }

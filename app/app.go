@@ -85,7 +85,7 @@ type ScalerizeApp struct {
 	// simulation manager
 	sm *module.SimulationManager
 
-	executionDBStoreKeys     map[string]storetypes.StoreKey
+	executionTablesInfo      map[uint8]TableInfo
 	executionCacheMultistore storetypes.CacheMultiStore
 	rwMutex                  sync.RWMutex
 }
@@ -129,8 +129,6 @@ func NewScalerizeApp(
 		ctx         = context.Background()
 	)
 
-	app.executionDBStoreKeys = make(map[string]storetypes.StoreKey)
-
 	if err := depinject.Inject(
 		depinject.Configs(
 			AppConfig(),
@@ -153,14 +151,9 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
-	fmt.Printf("TX CONFIG: %+v\n", app.txConfig)
-
 	socketPath = appOpts.Get(params.FlagSocketPath).(string)
-
-	// evmstorekey := storetypes.NewKVStoreKey(evmtypes.StoreKey)
-	// evmKeeper := evmkeeper.NewKeeper(evmtypes.EVMStoreKey, app.appCodec)
-
 	clientType := appOpts.Get(params.FlagExecutionClientType).(string)
+
 	switch clientType {
 	case evmexec.EVM:
 		engineAPIURL := appOpts.Get(params.FlagExecutionEngineURL).(string)
@@ -206,6 +199,21 @@ func NewScalerizeApp(
 			app.Logger().Error("failed to create EVM ABCI Handler")
 			return nil, err
 		}
+
+		app.executionTablesInfo = map[uint8]TableInfo{
+			HashedAccountsTableCode: {
+				DupSorted: false,
+				KeyBytes:  32,
+				StoreKey:  storetypes.NewKVStoreKey(HashedAccountsStoreName),
+			},
+			HashedStoragesTableCode: {
+				DupSorted:   true,
+				KeyBytes:    32,
+				SubKeyBytes: 32,
+				StoreKey:    storetypes.NewKVStoreKey(HashedStoragesStoreName),
+			},
+		}
+
 	default:
 		return nil, fmt.Errorf("invalid execution client type")
 	}
@@ -228,40 +236,15 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
-	// storeUpgrades := storetypes.StoreUpgrades{
-	// 	Added: []string{evmtypes.StoreKey},
-	// }
-
-	// if err := app.CommitMultiStore().LoadVersionAndUpgrade(app.CommitMultiStore().LatestVersion(), &storeUpgrades); err != nil {
-	// 	return nil, err
-	// }
-
-	// evmstorekey := storetypes.NewKVStoreKey(evmtypes.StoreKey)
 	if err := app.RegisterStores(evmtypes.EVMStoreKey); err != nil {
 		return nil, err
 	}
 
-	// for _, table := range lookUpTable {
-	// 	if err := app.RegisterStores(table.StoreKey); err != nil {
-	// 		return nil, err
-	// 	}
-	// }
-
-	// storeKey := storetypes.NewKVStoreKey("x")
-
-	// if err := app.RegisterStores(storeKey); err != nil {
-	// 	fmt.Println("ERR2: ", err)
-	// 	// errResponse = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
-	// 	// return
-	// }
-
-	// app.executionDBStoreKeys["x"] = storeKey
-
-	// evmKeeper := evmkeeper.NewKeeper(evmstorekey, app.appCodec)
-	// app.EVMKeeper = *evmKeeper
-	// if err := app.RegisterModules(evm.NewAppModule(evmKeeper)); err != nil {
-	// 	return nil, err
-	// }
+	for _, table := range app.executionTablesInfo {
+		if err := app.RegisterStores(table.StoreKey); err != nil {
+			return nil, err
+		}
+	}
 
 	/****  Module Options ****/
 
@@ -284,60 +267,12 @@ func NewScalerizeApp(
 
 	fmt.Printf("Registered Message Router: %+v\n", app.MsgServiceRouter())
 	fmt.Printf("Registered GRPC Router: %+v\n", app.GRPCQueryRouter())
-	// fmt.Println("STORE TYPE FOR NEW ADDED STORE", app.CommitMultiStore().GetKVStore(evmtypes.EVMStoreKey).GetStoreType())
-
-	// commitMultistore := app.CommitMultiStore()
-
-	// go func() {
-	// 	var cacheMultistore storetypes.CacheMultiStore
-
-	// 	e := echo.New()
-
-	// 	e.GET("/getparams", func(c echo.Context) error {
-	// 		params := evmtypes.Params{}
-	// 		kvstore := commitMultistore.GetKVStore(evmtypes.EVMStoreKey)
-	// 		bz := kvstore.Get([]byte{3})
-	// 		if len(bz) == 0 {
-	// 			return echo.NewHTTPError(http.StatusNotFound, errors.New("no data found"))
-	// 		}
-
-	// 		if err := json.Unmarshal(bz, &params); err != nil {
-	// 			return err
-	// 		}
-
-	// 		return c.JSON(http.StatusOK, params)
-	// 	})
-
-	// 	e.PUT("/setparams", func(c echo.Context) error {
-	// 		params := evmtypes.Params{
-	// 			Name: "Scalerized",
-	// 		}
-
-	// 		b, err := json.Marshal(params)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-
-	// 		cacheMultistore = app.CommitMultiStore().CacheMultiStore()
-	// 		cacheMultistore.GetKVStore(evmtypes.EVMStoreKey).Set([]byte{3}, b)
-
-	// 		return nil
-	// 	})
-
-	// 	e.GET("/write", func(c echo.Context) error {
-	// 		cacheMultistore.Write()
-	// 		return nil
-	// 	})
-
-	// 	e.GET("/apphash", func(c echo.Context) error {
-	// 		fmt.Println("LAST COMMIT HASH", commitMultistore.LastCommitID().Hash)
-	// 		return nil
-	// 	})
-
-	// 	e.Start(":3000")
-	// }()
 
 	go app.StartDBRouter()
+
+	for _, key := range app.GetStoreKeys() {
+		fmt.Println("STORE KEYS: ", key.Name())
+	}
 
 	return app, nil
 }

@@ -1,5 +1,7 @@
 package app
 
+import storetypes "cosmossdk.io/store/types"
+
 // Scalerize will handle data for 2 tables from Ethereum(reth)
 // 1. HashedAccounts
 // 2. HashedStorages
@@ -24,6 +26,9 @@ var (
 )
 
 const (
+	HashedAccountsStoreName = "hashed_accounts"
+	HashedStoragesStoreName = "hashed_storages"
+
 	HashedAccountsTableCode = 0
 	HashedStoragesTableCode = 1
 
@@ -36,18 +41,19 @@ type TableInfo struct {
 	DupSorted   bool
 	KeyBytes    int
 	SubKeyBytes int
-	StaticKey   []byte
+	StoreKey    storetypes.StoreKey
 }
 
-// var executionTableInfo = map[uint8]TableInfo{
-// 	HashedAccountsTableCode: {
-// 		DupSorted: false,
-// 		KeyBytes:  32,
-// 		StaticKey: []byte("account_data"),
-// 	},
-// 	HashedStoragesTableCode: {
-// 		DupSorted:   true,
-// 		KeyBytes:    32,
-// 		SubKeyBytes: 32,
-// 	},
-// }
+var ethExecutionTableInfo = map[uint8]TableInfo{
+	HashedAccountsTableCode: {
+		DupSorted: false,
+		KeyBytes:  32,
+		StoreKey:  storetypes.NewKVStoreKey(HashedAccountsStoreName),
+	},
+	HashedStoragesTableCode: {
+		DupSorted:   true,
+		KeyBytes:    32,
+		SubKeyBytes: 32,
+		StoreKey:    storetypes.NewKVStoreKey(HashedStoragesStoreName),
+	},
+}
