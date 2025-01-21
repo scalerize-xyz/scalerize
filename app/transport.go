@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net"
@@ -36,6 +37,8 @@ const (
 	OP_INSERT         byte = 13
 	OP_APPEND         byte = 14
 	OP_DELETE_CURRENT byte = 15
+
+	OP_DROP_CURSOR byte = 16
 )
 
 const (
@@ -118,8 +121,8 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 		tableCode = uint8(data[1])
 		fmt.Println("TABLE CODE: ", tableCode)
 
-		if _, ok := ethExecutionTableInfo[tableCode]; !ok {
-			response = append([]byte{STATUS_ERROR}, []byte(ErrStoreNotFound.Error())...)
+		if _, ok := app.executionTablesInfo[tableCode]; !ok {
+			response = append([]byte{STATUS_ERROR}, []byte(ErrTableNotFound.Error())...)
 			app.writeToConn(conn, response)
 			continue
 		}
@@ -182,7 +185,7 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 
 		case OP_DELETE:
 			// for DupSorted Table in delete request if:
-			// - key and value both are specified: only that entry is deleted
+			// - key and subkey both are specified: only that entry is deleted
 			// - only key is specified: all entries for that key is deleted
 
 			fmt.Println("DELETE REQUEST LEN: ", len(data))
@@ -216,79 +219,156 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 			app.Write()
 			response = []byte{STATUS_SUCCESS}
 
-		// case OP_FIRST:
-		// 	key, value, err := app.First(storeNumber)
-		// 	if err != nil {
-		// 		response = []byte{STATUS_ERROR}
-		// 		response = append(response, []byte(err.Error())...)
-		// 	} else {
-		// 		response = []byte{STATUS_SUCCESS}
-		// 		response = append(response, append(key, value...)...)
-		// 	}
+		case OP_FIRST:
+			table := app.executionTablesInfo[tableCode]
+			if table.DupSorted {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
 
-		// case OP_SEEK_EXACT:
-		// 	key := buffer[2 : 2+lookUpTable[storeNumber].NoOfKeyBytes]
-		// 	fmt.Println("KEY: ", key)
-		// 	value, err := app.SeekExact(storeNumber, key)
-		// 	if err != nil {
-		// 		response = []byte{STATUS_ERROR}
-		// 		response = append(response, []byte(err.Error())...)
-		// 	} else {
-		// 		response = []byte{STATUS_SUCCESS}
-		// 		response = append(response, value...)
-		// 	}
+			if len(data) != 2+CursorIDBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
 
-		// case OP_SEEK:
-		// 	key := buffer[2 : 2+lookUpTable[storeNumber].NoOfKeyBytes]
-		// 	fmt.Println("KEY: ", key)
-		// 	value, err := app.Seek(storeNumber, key)
-		// 	if err != nil {
-		// 		response = []byte{STATUS_ERROR}
-		// 		response = append(response, []byte(err.Error())...)
-		// 	} else {
-		// 		response = []byte{STATUS_SUCCESS}
-		// 		response = append(response, value...)
-		// 	}
+			var cursorId [8]byte
+			copy(cursorId[:], data[2:2+CursorIDBytes])
+			key, value, err := app.First(tableCode, cursorId)
+			if err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+			} else {
+				response = append([]byte{STATUS_SUCCESS}, append(key, value...)...)
+			}
 
-		// case OP_NEXT:
-		// 	key, value, err := app.Next(storeNumber)
-		// 	if err != nil {
-		// 		response = []byte{STATUS_ERROR}
-		// 		response = append(response, []byte(err.Error())...)
-		// 	} else {
-		// 		response = []byte{STATUS_SUCCESS}
-		// 		response = append(response, append(key, value...)...)
-		// 	}
+		case OP_SEEK_EXACT:
+			table := app.executionTablesInfo[tableCode]
+			if table.DupSorted {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
 
-		// case OP_PREV:
-		// 	key, value, err := app.Prev(storeNumber)
-		// 	if err != nil {
-		// 		response = []byte{STATUS_ERROR}
-		// 		response = append(response, []byte(err.Error())...)
-		// 	} else {
-		// 		response = []byte{STATUS_SUCCESS}
-		// 		response = append(response, append(key, value...)...)
-		// 	}
+			if len(data) != 2+CursorIDBytes+table.KeyBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
 
-		// case OP_LAST:
-		// 	key, value, err := app.Last(storeNumber)
-		// 	if err != nil {
-		// 		response = []byte{STATUS_ERROR}
-		// 		response = append(response, []byte(err.Error())...)
-		// 	} else {
-		// 		response = []byte{STATUS_SUCCESS}
-		// 		response = append(response, append(key, value...)...)
-		// 	}
+			var cursorId [8]byte
+			copy(cursorId[:], data[2:2+CursorIDBytes])
 
-		// case OP_CURRENT:
-		// 	key, value, err := app.Current(storeNumber)
-		// 	if err != nil {
-		// 		response = []byte{STATUS_ERROR}
-		// 		response = append(response, []byte(err.Error())...)
-		// 	} else {
-		// 		response = []byte{STATUS_SUCCESS}
-		// 		response = append(response, append(key, value...)...)
-		// 	}
+			key := data[2+CursorIDBytes:]
+			value, err := app.SeekExact(tableCode, cursorId, key)
+			if err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+			} else {
+				response = append([]byte{STATUS_SUCCESS}, value...)
+			}
+
+		case OP_SEEK:
+			table := app.executionTablesInfo[tableCode]
+			if table.DupSorted {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			if len(data) != 2+CursorIDBytes+table.KeyBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			var cursorId [8]byte
+			copy(cursorId[:], data[2:2+CursorIDBytes])
+
+			key := data[2+CursorIDBytes:]
+			value, err := app.Seek(tableCode, cursorId, key)
+			if err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+			} else {
+				response = append([]byte{STATUS_SUCCESS}, value...)
+			}
+
+		case OP_NEXT:
+			table := app.executionTablesInfo[tableCode]
+			if table.DupSorted {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			if len(data) != 2+CursorIDBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			var cursorId [8]byte
+			copy(cursorId[:], data[2:2+CursorIDBytes])
+			key, value, err := app.Next(tableCode, cursorId)
+			if err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+			} else {
+				response = append([]byte{STATUS_SUCCESS}, append(key, value...)...)
+			}
+
+		case OP_PREV:
+			table := app.executionTablesInfo[tableCode]
+			if table.DupSorted {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			if len(data) != 2+CursorIDBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			var cursorId [8]byte
+			copy(cursorId[:], data[2:2+CursorIDBytes])
+			key, value, err := app.Prev(tableCode, cursorId)
+			if err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+			} else {
+				response = append([]byte{STATUS_SUCCESS}, append(key, value...)...)
+			}
+
+		case OP_LAST:
+			table := app.executionTablesInfo[tableCode]
+			if table.DupSorted {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			if len(data) != 2+CursorIDBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			var cursorId [8]byte
+			copy(cursorId[:], data[2:2+CursorIDBytes])
+			key, value, err := app.Last(tableCode, cursorId)
+			if err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+			} else {
+				response = append([]byte{STATUS_SUCCESS}, append(key, value...)...)
+			}
+
+		case OP_CURRENT:
+			table := app.executionTablesInfo[tableCode]
+			if table.DupSorted {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			if len(data) != 2+CursorIDBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			var cursorId [8]byte
+			copy(cursorId[:], data[2:2+CursorIDBytes])
+			key, value, err := app.Current(tableCode, cursorId)
+			if err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+			} else {
+				response = append([]byte{STATUS_SUCCESS}, append(key, value...)...)
+			}
 
 		default:
 			response = []byte{STATUS_ERROR}
@@ -299,13 +379,40 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 	}
 }
 
+// func (app *ScalerizeApp) Get(tableCode uint8, key []byte) ([]byte, error) {
+// 	app.rwMutex.RLock()
+// 	defer app.rwMutex.RUnlock()
+
+// 	table, ok := app.executionTablesInfo[tableCode]
+// 	if !ok {
+// 		return nil, ErrTableNotFound
+// 	}
+
+// 	if table.DupSorted {
+// 		iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(key, storetypes.PrefixEndBytes(key))
+// 		defer iterator.Close()
+
+// 		if !iterator.Valid() {
+// 			return nil, ErrDataNotFound
+// 		}
+
+// 		return iterator.Value(), nil
+// 	}
+
+// 	if !app.CommitMultiStore().GetKVStore(table.StoreKey).Has(key) {
+// 		return nil, ErrDataNotFound
+// 	}
+
+// 	return app.CommitMultiStore().GetKVStore(table.StoreKey).Get(key), nil
+// }
+
 func (app *ScalerizeApp) Get(tableCode uint8, key []byte) ([]byte, error) {
 	app.rwMutex.RLock()
 	defer app.rwMutex.RUnlock()
 
 	table, ok := app.executionTablesInfo[tableCode]
 	if !ok {
-		return nil, ErrStoreNotFound
+		return nil, ErrTableNotFound
 	}
 
 	if table.DupSorted {
@@ -316,7 +423,11 @@ func (app *ScalerizeApp) Get(tableCode uint8, key []byte) ([]byte, error) {
 			return nil, ErrDataNotFound
 		}
 
-		return iterator.Value(), nil
+		subkey := iterator.Key()[table.KeyBytes:]
+		value := iterator.Value()
+
+		response := append(subkey, value...)
+		return response, nil
 	}
 
 	if !app.CommitMultiStore().GetKVStore(table.StoreKey).Has(key) {
@@ -332,7 +443,7 @@ func (app *ScalerizeApp) Put(tableCode uint8, key []byte, value []byte) error {
 
 	table, ok := app.executionTablesInfo[tableCode]
 	if !ok {
-		return ErrStoreNotFound
+		return ErrTableNotFound
 	}
 
 	app.executionCacheMultistore.GetKVStore(table.StoreKey).Set(key, value)
@@ -346,7 +457,7 @@ func (app *ScalerizeApp) Delete(tableCode uint8, key []byte, keyIncludesSubkey b
 
 	table, ok := app.executionTablesInfo[tableCode]
 	if !ok {
-		return ErrStoreNotFound
+		return ErrTableNotFound
 	}
 
 	store := app.executionCacheMultistore.GetKVStore(table.StoreKey)
@@ -383,181 +494,183 @@ func (app *ScalerizeApp) Write() {
 }
 
 // first gets the first entry in the table and sets the cursor to that key
-// func (app *ScalerizeApp) First(storeName string) ([]byte, []byte, error) {
-// 	app.rwMutex.RLock()
-// 	defer app.rwMutex.RUnlock()
+func (app *ScalerizeApp) First(tableCode uint8, cursorID [8]byte) ([]byte, []byte, error) {
+	app.rwMutex.RLock()
+	defer app.rwMutex.RUnlock()
 
-// 	fmt.Println("ITERATOR POSITION BEFORE FIRST: ", lookUpTable[storeNumber].IteratorsKey)
+	table, ok := app.executionTablesInfo[tableCode]
+	if !ok {
+		return nil, nil, ErrTableNotFound
+	}
 
-// 	store, err := getTable(storeNumber)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
+	fmt.Println("ITERATOR POSITION BEFORE FIRST: ", ethIteratorsCurrentKey[cursorID])
 
-// 	iterator := app.CommitMultiStore().GetKVStore(store.StoreKey).Iterator(nil, nil)
-// 	defer iterator.Close()
+	iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(nil, nil)
+	defer iterator.Close()
 
-// 	if !iterator.Valid() {
-// 		return nil, nil, ErrStoreIsEmpty
-// 	}
+	if !iterator.Valid() {
+		return nil, nil, ErrTableIsEmpty
+	}
 
-// 	lookUpTable[storeNumber].IteratorsKey = iterator.Key()
+	ethIteratorsCurrentKey[cursorID] = iterator.Key()
 
-// 	fmt.Println("ITERATOR POSITION AFTER FIRST: ", lookUpTable[storeNumber].IteratorsKey)
+	fmt.Println("ITERATOR POSITION AFTER FIRST: ", ethIteratorsCurrentKey[cursorID])
 
-// 	return iterator.Key(), iterator.Value(), nil
-// }
+	return iterator.Key(), iterator.Value(), nil
+}
 
-// // seek exact (sets the key to cursor to the exact key and return the key value pair)
-// // or (just sets the iterator to the next greater one)
-// func (app *ScalerizeApp) SeekExact(storeNumber uint8, key []byte) ([]byte, error) {
-// 	app.rwMutex.RLock()
-// 	defer app.rwMutex.RUnlock()
+// seek exact (sets the key to cursor to the exact key and return the key value pair)
+// or (just sets the iterator to the next greater one)
+func (app *ScalerizeApp) SeekExact(tableCode uint8, cursorID [8]byte, key []byte) ([]byte, error) {
+	app.rwMutex.RLock()
+	defer app.rwMutex.RUnlock()
 
-// 	fmt.Println("ITERATOR POSITION BEFORE SEEK_EXACT: ", lookUpTable[storeNumber].IteratorsKey)
+	fmt.Println("ITERATOR POSITION BEFORE SEEK_EXACT: ", ethIteratorsCurrentKey[cursorID])
 
-// 	store, err := getTable(storeNumber)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	table, ok := app.executionTablesInfo[tableCode]
+	if !ok {
+		return nil, ErrTableNotFound
+	}
 
-// 	// if key does not exists then the iterator start domain is set to the next greater key
-// 	iterator := app.CommitMultiStore().GetKVStore(store.StoreKey).Iterator(key, nil)
-// 	defer iterator.Close()
+	// if key does not exists then the iterator start domain is set to the next greater key
+	iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(key, nil)
+	defer iterator.Close()
 
-// 	if !iterator.Valid() {
-// 		return nil, ErrExactOrGreaterKeyNotExists
-// 	}
+	if !iterator.Valid() {
+		return nil, ErrExactOrGreaterKeyNotExists
+	}
 
-// 	lookUpTable[storeNumber].IteratorsKey = iterator.Key()
+	ethIteratorsCurrentKey[cursorID] = iterator.Key()
 
-// 	fmt.Println("ITERATOR POSITION AFTER SEEK_EXACT: ", lookUpTable[storeNumber].IteratorsKey)
+	fmt.Println("ITERATOR POSITION AFTER SEEK_EXACT: ", ethIteratorsCurrentKey[cursorID])
 
-// 	if !bytes.Equal(key, iterator.Key()) {
-// 		return nil, ErrKeyNotExists
-// 	}
+	if !bytes.Equal(key, iterator.Key()) {
+		return nil, nil
+	}
 
-// 	return iterator.Value(), nil
-// }
+	return iterator.Value(), nil
+}
 
-// // seek (sets the key to cursor to the (exact or next greater key) and return the key value pair)
-// func (app *ScalerizeApp) Seek(storeNumber uint8, key []byte) ([]byte, error) {
-// 	app.rwMutex.RLock()
-// 	defer app.rwMutex.RUnlock()
+// seek (sets the key to cursor to the (exact or next greater key) and return the key value pair)
+func (app *ScalerizeApp) Seek(tableCode uint8, cursorID [8]byte, key []byte) ([]byte, error) {
+	app.rwMutex.RLock()
+	defer app.rwMutex.RUnlock()
 
-// 	fmt.Println("ITERATOR POSITION BEFORE SEEK: ", lookUpTable[storeNumber].IteratorsKey)
+	fmt.Println("ITERATOR POSITION BEFORE SEEK: ", ethIteratorsCurrentKey[cursorID])
 
-// 	store, err := getTable(storeNumber)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	table, ok := app.executionTablesInfo[tableCode]
+	if !ok {
+		return nil, ErrTableNotFound
+	}
 
-// 	iterator := app.CommitMultiStore().GetKVStore(store.StoreKey).Iterator(key, nil)
-// 	defer iterator.Close()
+	iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(key, nil)
+	defer iterator.Close()
 
-// 	if !iterator.Valid() {
-// 		return nil, ErrExactOrGreaterKeyNotExists
-// 	}
+	if !iterator.Valid() {
+		return nil, ErrExactOrGreaterKeyNotExists
+	}
 
-// 	lookUpTable[storeNumber].IteratorsKey = iterator.Key()
+	ethIteratorsCurrentKey[cursorID] = iterator.Key()
 
-// 	fmt.Println("ITERATOR POSITION AFTER SEEK: ", lookUpTable[storeNumber].IteratorsKey)
+	fmt.Println("ITERATOR POSITION AFTER SEEK: ", ethIteratorsCurrentKey[cursorID])
 
-// 	return iterator.Value(), nil
-// }
+	return iterator.Value(), nil
+}
 
-// // next returns the next from the current entry in the table, but if
-// // current key is not set of the cursor then first entry is returned
-// func (app *ScalerizeApp) Next(storeNumber uint8) ([]byte, []byte, error) {
-// 	app.rwMutex.RLock()
-// 	defer app.rwMutex.RUnlock()
+// next returns the next from the current entry in the table, but if
+// current key is not set of the cursor then first entry is returned
+func (app *ScalerizeApp) Next(tableCode uint8, cursorID [8]byte) ([]byte, []byte, error) {
+	app.rwMutex.RLock()
+	defer app.rwMutex.RUnlock()
 
-// 	fmt.Println("ITERATOR POSITION BEFORE NEXT: ", lookUpTable[storeNumber].IteratorsKey)
+	fmt.Println("ITERATOR POSITION BEFORE NEXT: ", ethIteratorsCurrentKey[cursorID])
 
-// 	store, err := getTable(storeNumber)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
+	table, ok := app.executionTablesInfo[tableCode]
+	if !ok {
+		return nil, nil, ErrTableNotFound
+	}
 
-// 	if store.IteratorsKey == nil {
-// 		return app.First(storeNumber)
-// 	}
+	currentKey, ok := ethIteratorsCurrentKey[cursorID]
+	if !ok {
+		return app.First(tableCode, cursorID)
+	}
 
-// 	iterator := app.CommitMultiStore().GetKVStore(store.StoreKey).Iterator(store.IteratorsKey, nil)
-// 	defer iterator.Close()
+	iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(currentKey, nil)
+	defer iterator.Close()
 
-// 	if !iterator.Valid() {
-// 		return nil, nil, ErrCurrentIteratorKeyIsInvalid
-// 	}
+	if !iterator.Valid() {
+		return nil, nil, ErrCurrentIteratorKeyIsInvalid
+	}
 
-// 	iterator.Next()
-// 	if !iterator.Valid() {
-// 		return nil, nil, ErrCannotIterateToNextFromLast
-// 	}
+	iterator.Next()
+	if !iterator.Valid() {
+		return nil, nil, ErrCannotIterateToNextFromLast
+	}
 
-// 	lookUpTable[storeNumber].IteratorsKey = iterator.Key()
+	ethIteratorsCurrentKey[cursorID] = iterator.Key()
 
-// 	fmt.Println("ITERATOR POSITION AFTER NEXT: ", lookUpTable[storeNumber].IteratorsKey)
+	fmt.Println("ITERATOR POSITION AFTER NEXT: ", ethIteratorsCurrentKey[cursorID])
 
-// 	return iterator.Key(), iterator.Value(), nil
-// }
+	return iterator.Key(), iterator.Value(), nil
+}
 
-// // prev returns the previous from the current entry of the table but if
-// // current key is not set then the last entry is returned
-// func (app *ScalerizeApp) Prev(storeNumber uint8) ([]byte, []byte, error) {
-// 	app.rwMutex.RLock()
-// 	defer app.rwMutex.RUnlock()
+// prev returns the previous from the current entry of the table but if
+// current key is not set then the last entry is returned
+func (app *ScalerizeApp) Prev(tableCode uint8, cursorID [8]byte) ([]byte, []byte, error) {
+	app.rwMutex.RLock()
+	defer app.rwMutex.RUnlock()
 
-// 	fmt.Println("ITERATOR POSITION BEFORE PREV: ", lookUpTable[storeNumber].IteratorsKey)
+	fmt.Println("ITERATOR POSITION BEFORE PREV: ", ethIteratorsCurrentKey[cursorID])
 
-// 	store, err := getTable(storeNumber)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
+	table, ok := app.executionTablesInfo[tableCode]
+	if !ok {
+		return nil, nil, ErrTableNotFound
+	}
 
-// 	if store.IteratorsKey == nil {
-// 		return app.Last(storeNumber)
-// 	}
+	currentKey, ok := ethIteratorsCurrentKey[cursorID]
+	if !ok {
+		return app.Last(tableCode, cursorID)
+	}
 
-// 	iterator := app.CommitMultiStore().GetCommitKVStore(store.StoreKey).ReverseIterator(nil, store.IteratorsKey)
-// 	defer iterator.Close()
+	iterator := app.CommitMultiStore().GetCommitKVStore(table.StoreKey).ReverseIterator(nil, currentKey)
+	defer iterator.Close()
 
-// 	if !iterator.Valid() {
-// 		return nil, nil, ErrCannotIterateToPrevFromFirst
-// 	}
+	if !iterator.Valid() {
+		return nil, nil, ErrCannotIterateToPrevFromFirst
+	}
 
-// 	lookUpTable[storeNumber].IteratorsKey = iterator.Key()
+	ethIteratorsCurrentKey[cursorID] = iterator.Key()
 
-// 	fmt.Println("ITERATOR POSITION AFTER PREV: ", lookUpTable[storeNumber].IteratorsKey)
+	fmt.Println("ITERATOR POSITION AFTER PREV: ", ethIteratorsCurrentKey[cursorID])
 
-// 	return iterator.Key(), iterator.Value(), nil
-// }
+	return iterator.Key(), iterator.Value(), nil
+}
 
 // // last gets the last entry in the table and sets the cursor to that key
-// func (app *ScalerizeApp) Last(storeNumber uint8) ([]byte, []byte, error) {
-// 	app.rwMutex.RLock()
-// 	defer app.rwMutex.RUnlock()
+func (app *ScalerizeApp) Last(tableCode uint8, cursorID [8]byte) ([]byte, []byte, error) {
+	app.rwMutex.RLock()
+	defer app.rwMutex.RUnlock()
 
-// 	fmt.Println("ITERATOR POSITION BEFORE LAST: ", lookUpTable[storeNumber].IteratorsKey)
+	fmt.Println("ITERATOR POSITION BEFORE LAST: ", ethIteratorsCurrentKey[cursorID])
 
-// 	store, err := getTable(storeNumber)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
+	table, ok := app.executionTablesInfo[tableCode]
+	if !ok {
+		return nil, nil, ErrTableNotFound
+	}
 
-// 	iterator := app.CommitMultiStore().GetKVStore(store.StoreKey).ReverseIterator(nil, nil)
-// 	defer iterator.Close()
+	iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).ReverseIterator(nil, nil)
+	defer iterator.Close()
 
-// 	if !iterator.Valid() {
-// 		return nil, nil, ErrStoreIsEmpty
-// 	}
+	if !iterator.Valid() {
+		return nil, nil, ErrTableIsEmpty
+	}
 
-// 	lookUpTable[storeNumber].IteratorsKey = iterator.Key()
+	ethIteratorsCurrentKey[cursorID] = iterator.Key()
 
-// 	fmt.Println("ITERATOR POSITION AFTER LAST: ", lookUpTable[storeNumber].IteratorsKey)
+	fmt.Println("ITERATOR POSITION AFTER LAST: ", ethIteratorsCurrentKey[cursorID])
 
-// 	return iterator.Key(), iterator.Value(), nil
-// }
+	return iterator.Key(), iterator.Value(), nil
+}
 
 // func (app *ScalerizeApp) Insert(storeNumber uint8, key []byte, value []byte) error {
 // 	app.rwMutex.Lock()
@@ -572,32 +685,33 @@ func (app *ScalerizeApp) Write() {
 // 	return nil
 // }
 
-// func (app *ScalerizeApp) Current(storeNumber uint8) ([]byte, []byte, error) {
-// 	app.rwMutex.RLock()
-// 	defer app.rwMutex.RUnlock()
+func (app *ScalerizeApp) Current(tableCode uint8, cursorID [8]byte) ([]byte, []byte, error) {
+	app.rwMutex.RLock()
+	defer app.rwMutex.RUnlock()
 
-// 	fmt.Println("ITERATOR POSITION BEFORE CURRENT: ", lookUpTable[storeNumber].IteratorsKey)
+	fmt.Println("ITERATOR POSITION BEFORE CURRENT: ", ethIteratorsCurrentKey[cursorID])
 
-// 	store, err := getTable(storeNumber)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
+	table, ok := app.executionTablesInfo[tableCode]
+	if !ok {
+		return nil, nil, ErrTableNotFound
+	}
 
-// 	if store.IteratorsKey == nil {
-// 		return nil, nil, ErrCurrentKeyIsNotSet
-// 	}
+	currentKey, ok := ethIteratorsCurrentKey[cursorID]
+	if !ok {
+		return nil, nil, ErrCurrentKeyIsNotSet
+	}
 
-// 	iterator := app.CommitMultiStore().GetKVStore(store.StoreKey).Iterator(store.IteratorsKey, storetypes.PrefixEndBytes(store.IteratorsKey))
-// 	defer iterator.Close()
+	store := app.CommitMultiStore().GetKVStore(table.StoreKey)
+	if !store.Has(currentKey) {
+		return nil, nil, ErrKeyNotExists
+	}
 
-// 	if !iterator.Valid() {
-// 		return nil, nil, ErrKeyNotExists
-// 	}
+	value := app.CommitMultiStore().GetKVStore(table.StoreKey).Get(currentKey)
 
-// 	fmt.Println("ITERATOR POSITION AFTER CURRENT: ", lookUpTable[storeNumber].IteratorsKey)
+	fmt.Println("ITERATOR POSITION AFTER CURRENT: ", ethIteratorsCurrentKey[cursorID])
 
-// 	return iterator.Key(), iterator.Value(), nil
-// }
+	return currentKey, value, nil
+}
 
 func (app *ScalerizeApp) writeToConn(conn net.Conn, response []byte) {
 	if _, err := conn.Write(response); err != nil {

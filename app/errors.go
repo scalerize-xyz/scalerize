@@ -9,7 +9,7 @@ var (
 	ErrWritingToReth                                    = errors.New("failed to write response to reth db client")
 	ErrInvalidOperationCode                             = errors.New("invalid operation code")
 	ErrInvalidTableCode                                 = errors.New("invalid table code")
-	ErrStoreNotFound                                    = errors.New("store not found")
+	ErrTableNotFound                                    = errors.New("table not found")
 	ErrTableIsEmpty                                     = errors.New("table is empty")
 	ErrKeyNotExists                                     = errors.New("exact key not exists")
 	ErrExactOrGreaterKeyNotExists                       = errors.New("exact or greater key does not exists")

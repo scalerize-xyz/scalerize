@@ -23,6 +23,8 @@ var (
 		0xff, 0xff, 0xff, 0xff,
 		0xff, 0xff, 0xff, 0xff,
 	}
+
+	ethIteratorsCurrentKey = make(map[[CursorIDBytes]byte][]byte)
 )
 
 const (
@@ -35,6 +37,8 @@ const (
 	HashedAccountsKeyBytes    = 32
 	HashedStoragesKeyBytes    = 32
 	HashedStoragesSubKeyBytes = 32
+
+	CursorIDBytes = 8
 )
 
 type TableInfo struct {
@@ -42,18 +46,4 @@ type TableInfo struct {
 	KeyBytes    int
 	SubKeyBytes int
 	StoreKey    storetypes.StoreKey
-}
-
-var ethExecutionTableInfo = map[uint8]TableInfo{
-	HashedAccountsTableCode: {
-		DupSorted: false,
-		KeyBytes:  32,
-		StoreKey:  storetypes.NewKVStoreKey(HashedAccountsStoreName),
-	},
-	HashedStoragesTableCode: {
-		DupSorted:   true,
-		KeyBytes:    32,
-		SubKeyBytes: 32,
-		StoreKey:    storetypes.NewKVStoreKey(HashedStoragesStoreName),
-	},
 }
