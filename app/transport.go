@@ -38,6 +38,12 @@ const (
 	OP_APPEND         byte = 14
 	OP_DELETE_CURRENT byte = 15
 
+	// DbDupCursorRO for dup-sorted tables
+	OP_NEXT_DUP           byte = 16
+	OP_NEXT_NO_DUP        byte = 17
+	OP_NEXT_DUP_VAL       byte = 18
+	OP_SEEK_BY_KEY_SUBKEY byte = 19
+
 	OP_DROP_CURSOR byte = 16
 )
 
@@ -45,13 +51,6 @@ const (
 	STATUS_SUCCESS byte = 1
 	STATUS_ERROR   byte = 0
 )
-
-// var (
-// just for testing iterator functionality
-// 	startKey      = []byte{1, 2, 3, 4}
-// 	invalidEndKey = []byte{0, 2, 3, 4}
-// 	sks           = []storetypes.StoreKey{}
-// )
 
 func (app *ScalerizeApp) StartDBRouter() {
 	os.Remove(socketPath)
@@ -453,6 +452,91 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 				response = []byte{STATUS_SUCCESS}
 			}
 
+		case OP_NEXT_DUP:
+			table := app.executionTablesInfo[tableCode]
+			if !table.DupSorted {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			if len(data) != 2+CursorIDBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			var cursorId [8]byte
+			copy(cursorId[:], data[2:2+CursorIDBytes])
+			resp, err := app.NextDup(false, tableCode, cursorId)
+			if err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+			} else {
+				response = append([]byte{STATUS_SUCCESS}, resp...)
+			}
+
+		case OP_NEXT_NO_DUP:
+			table := app.executionTablesInfo[tableCode]
+			if !table.DupSorted {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			if len(data) != 2+CursorIDBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			var cursorId [8]byte
+			copy(cursorId[:], data[2:2+CursorIDBytes])
+			resp, err := app.NextNoDup(tableCode, cursorId)
+			if err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+			} else {
+				response = append([]byte{STATUS_SUCCESS}, resp...)
+			}
+
+		case OP_NEXT_DUP_VAL:
+			table := app.executionTablesInfo[tableCode]
+			if !table.DupSorted {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			if len(data) != 2+CursorIDBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			var cursorId [8]byte
+			copy(cursorId[:], data[2:2+CursorIDBytes])
+			resp, err := app.NextDup(true, tableCode, cursorId)
+			if err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+			} else {
+				response = append([]byte{STATUS_SUCCESS}, resp...)
+			}
+
+		case OP_SEEK_BY_KEY_SUBKEY:
+			table := app.executionTablesInfo[tableCode]
+			if !table.DupSorted {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			if len(data) != 2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			var cursorId [8]byte
+			copy(cursorId[:], data[2:2+CursorIDBytes])
+
+			key := data[2+CursorIDBytes:]
+			resp, err := app.SeekByKeySubkey(tableCode, cursorId, key)
+			if err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+			} else {
+				response = append([]byte{STATUS_SUCCESS}, resp...)
+			}
 		default:
 			response = []byte{STATUS_ERROR}
 			response = append(response, []byte(ErrInvalidOperationCode.Error())...)
@@ -916,6 +1000,148 @@ func (app *ScalerizeApp) DeleteCurrent(tableCode uint8, cursorID [8]byte) error 
 	fmt.Println("ITERATOR POSITION BEFORE DELETE CURRENT: ", ethIteratorsCurrentKey[cursorID])
 
 	return nil
+}
+
+// next_dup returns the next entry with same key (not key+subkey)
+// if next entry is not with the same key then it return None
+func (app *ScalerizeApp) NextDup(onlyVal bool, tableCode uint8, cursorID [8]byte) ([]byte, error) {
+	app.rwMutex.RLock()
+	defer app.rwMutex.RUnlock()
+
+	var response []byte
+
+	fmt.Println("ITERATOR POSITION BEFORE NEXT DUP: ", ethIteratorsCurrentKey[cursorID])
+	fmt.Println("ONLY VAL: ", onlyVal)
+
+	table, ok := app.executionTablesInfo[tableCode]
+	if !ok {
+		return nil, ErrTableNotFound
+	}
+
+	if !table.DupSorted {
+		return nil, ErrInvalidRequestData
+	}
+
+	currentKey, ok := ethIteratorsCurrentKey[cursorID]
+	if !ok {
+		resp, err := app.First(tableCode, cursorID)
+		if onlyVal && err == nil {
+			resp = resp[table.KeyBytes:]
+		}
+
+		return resp, err
+	}
+
+	key := currentKey[:table.KeyBytes]
+	fmt.Println("CURRENT KEY: ", currentKey)
+	fmt.Println("KEY: ", key)
+
+	iterator := app.CommitMultiStore().GetCommitKVStore(table.StoreKey).Iterator(currentKey, storetypes.PrefixEndBytes(key))
+	defer iterator.Close()
+
+	if !iterator.Valid() {
+		fmt.Println("ERROR 1")
+		return nil, ErrCurrentIteratorKeyIsInvalid
+	}
+
+	iterator.Next()
+
+	if !iterator.Valid() {
+		fmt.Println("ERROR 2")
+		return nil, nil
+	}
+
+	if bytes.HasPrefix(iterator.Key(), key) {
+		ethIteratorsCurrentKey[cursorID] = iterator.Key()
+
+		fmt.Println("ITERATOR POSITION AFTER NEXT DUP: ", ethIteratorsCurrentKey[cursorID])
+
+		if onlyVal {
+			response = append(iterator.Key()[table.KeyBytes:], iterator.Value()...)
+		} else {
+			response = append(iterator.Key(), iterator.Value()...)
+		}
+	}
+
+	return response, nil
+}
+
+// next_no_dup returns the first entry for the next key(not key+subkey)
+// if current key is greatest then return nil
+func (app *ScalerizeApp) NextNoDup(tableCode uint8, cursorID [8]byte) ([]byte, error) {
+	app.rwMutex.RLock()
+	defer app.rwMutex.RUnlock()
+
+	fmt.Println("ITERATOR POSITION BEFORE NEXT NO DUP: ", ethIteratorsCurrentKey[cursorID])
+
+	table, ok := app.executionTablesInfo[tableCode]
+	if !ok {
+		return nil, ErrTableNotFound
+	}
+
+	if !table.DupSorted {
+		return nil, ErrInvalidRequestData
+	}
+
+	currentKey, ok := ethIteratorsCurrentKey[cursorID]
+	if !ok {
+		return app.First(tableCode, cursorID)
+	}
+
+	key := currentKey[:table.KeyBytes]
+	fmt.Println("CURRENT KEY: ", currentKey)
+	fmt.Println("KEY: ", key)
+
+	iterator := app.CommitMultiStore().GetCommitKVStore(table.StoreKey).Iterator(storetypes.PrefixEndBytes(key), nil)
+	defer iterator.Close()
+
+	if !iterator.Valid() {
+		fmt.Println("THIS ERROR 1")
+		return nil, nil
+	}
+
+	ethIteratorsCurrentKey[cursorID] = iterator.Key()
+	fmt.Println("ITERATOR POSITION AFTER NEXT NO DUP: ", ethIteratorsCurrentKey[cursorID])
+	response := append(iterator.Key(), iterator.Value()...)
+
+	return response, nil
+}
+
+// seek_by_key_subkey returns only value
+// positions the cursor at the entry greater than or equal to the provided key/subkey pair
+// if key(not key+subkey) does not exists, then returns nil
+// if key exists but subkey is greater than the greatest subkey for that key, then returns nil
+// if key and subkey exists, it returns value at that entry
+// if key exists and subkey does not exists, then it returns the next greater key/subkey pair for that key
+func (app *ScalerizeApp) SeekByKeySubkey(tableCode uint8, cursorID [8]byte, k []byte) ([]byte, error) {
+	app.rwMutex.RLock()
+	defer app.rwMutex.RUnlock()
+
+	fmt.Println("ITERATOR POSITION BEFORE SEEK BY KEY SUBKEY: ", ethIteratorsCurrentKey[cursorID])
+
+	table, ok := app.executionTablesInfo[tableCode]
+	if !ok {
+		return nil, ErrTableNotFound
+	}
+
+	if !table.DupSorted {
+		return nil, ErrInvalidRequestData
+	}
+
+	key := k[:table.KeyBytes]
+	iterator := app.CommitMultiStore().GetCommitKVStore(table.StoreKey).Iterator(k, storetypes.PrefixEndBytes(key))
+	defer iterator.Close()
+
+	if !iterator.Valid() {
+		fmt.Println("KEY DOES NOT EXISTS")
+		return nil, nil
+	}
+
+	ethIteratorsCurrentKey[cursorID] = iterator.Key()
+	fmt.Println("ITERATOR POSITION AFTER SEEK BY KEY SUBKEY: ", ethIteratorsCurrentKey[cursorID])
+
+	response := append(iterator.Key()[table.KeyBytes:], iterator.Value()...)
+	return response, nil
 }
 
 func (app *ScalerizeApp) writeToConn(conn net.Conn, response []byte) {
