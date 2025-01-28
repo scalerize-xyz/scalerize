@@ -10,48 +10,6 @@ import (
 	storetypes "cosmossdk.io/store/types"
 )
 
-// todo: if we are not able to figure out the number of key bytes for a particular store
-// maybe they can vary, then we can send the number of key bytes in the request only
-
-// todo: if multiple cursor instances are being created in reth, then we can add a new field
-// in the reth implementation which stores the curr key for the cursor and send the curr key
-// with each request.
-const (
-	// DbTx and DbTxMut for both regular and dup-sorted tables
-	OP_PUT    byte = 1
-	OP_GET    byte = 2
-	OP_DELETE byte = 3
-	OP_WRITE  byte = 4
-
-	// DbCursorRO for both regular and dup-sorted tables
-	OP_FIRST      byte = 5
-	OP_SEEK_EXACT byte = 6
-	OP_SEEK       byte = 7
-	OP_NEXT       byte = 8
-	OP_PREV       byte = 9
-	OP_LAST       byte = 10
-	OP_CURRENT    byte = 11
-
-	// DbCursorRW for both regular and dup-sorted tables
-	OP_UPSERT         byte = 12
-	OP_INSERT         byte = 13
-	OP_APPEND         byte = 14
-	OP_DELETE_CURRENT byte = 15
-
-	// DbDupCursorRO for dup-sorted tables
-	OP_NEXT_DUP           byte = 16
-	OP_NEXT_NO_DUP        byte = 17
-	OP_NEXT_DUP_VAL       byte = 18
-	OP_SEEK_BY_KEY_SUBKEY byte = 19
-
-	OP_DROP_CURSOR byte = 16
-)
-
-const (
-	STATUS_SUCCESS byte = 1
-	STATUS_ERROR   byte = 0
-)
-
 func (app *ScalerizeApp) StartDBRouter() {
 	os.Remove(socketPath)
 
@@ -112,8 +70,6 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 
 		data := buffer[:n]
 
-		// fmt.Println("BUFFER: ", buffer)
-
 		operation := data[0]
 		fmt.Println("OPERATION: ", operation)
 
@@ -128,9 +84,6 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 
 		switch operation {
 		case OP_GET:
-
-			fmt.Println("GET REQUEST LEN: ", len(data))
-
 			var key []byte
 
 			table := app.executionTablesInfo[tableCode]
@@ -537,6 +490,50 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 			} else {
 				response = append([]byte{STATUS_SUCCESS}, resp...)
 			}
+
+		case OP_DELETE_CURRENT_DUPLICATES:
+			table := app.executionTablesInfo[tableCode]
+			if !table.DupSorted {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			if len(data) != 2+CursorIDBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			var cursorId [8]byte
+			copy(cursorId[:], data[2:2+CursorIDBytes])
+			if err := app.DeleteCurrentDuplicates(tableCode, cursorId); err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+			} else {
+				response = []byte{STATUS_SUCCESS}
+			}
+
+		case OP_APPEND_DUP:
+			table := app.executionTablesInfo[tableCode]
+			if !table.DupSorted {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			if len(data) <= 2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
+			key := data[2+CursorIDBytes : 2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes]
+			value := data[2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes:]
+
+			var cursorId [8]byte
+			copy(cursorId[:], data[2:2+CursorIDBytes])
+			if err := app.AppendDup(tableCode, cursorId, key, value); err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+			} else {
+				response = []byte{STATUS_SUCCESS}
+			}
+
 		default:
 			response = []byte{STATUS_ERROR}
 			response = append(response, []byte(ErrInvalidOperationCode.Error())...)
@@ -546,6 +543,8 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 	}
 }
 
+// Get: returns the value at a particular key
+// for dup-sorted tables, it returns the first(lexicographically) entry for the key specified
 func (app *ScalerizeApp) Get(tableCode uint8, key []byte) ([]byte, error) {
 	app.rwMutex.RLock()
 	defer app.rwMutex.RUnlock()
@@ -577,6 +576,7 @@ func (app *ScalerizeApp) Get(tableCode uint8, key []byte) ([]byte, error) {
 	return app.CommitMultiStore().GetKVStore(table.StoreKey).Get(key), nil
 }
 
+// Put: adds a new entry
 func (app *ScalerizeApp) Put(tableCode uint8, key, value []byte) error {
 	app.rwMutex.Lock()
 	defer app.rwMutex.Unlock()
@@ -591,6 +591,9 @@ func (app *ScalerizeApp) Put(tableCode uint8, key, value []byte) error {
 	return nil
 }
 
+// Delete: deletes entry for the key specified
+// for dup-sorted tables, deletes entry at the key and subkey
+// but if subkey is not specified, then deletes all entries for the key specified
 func (app *ScalerizeApp) Delete(tableCode uint8, key []byte, keyIncludesSubkey bool) error {
 	app.rwMutex.Lock()
 	defer app.rwMutex.Unlock()
@@ -633,7 +636,7 @@ func (app *ScalerizeApp) Write() {
 	app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
 }
 
-// first gets the first entry in the table and sets the cursor to that key
+// First: returns the first entry in the table and sets the cursor to that key
 // same for dup-sorted tables
 func (app *ScalerizeApp) First(tableCode uint8, cursorID [8]byte) ([]byte, error) {
 	app.rwMutex.RLock()
@@ -661,8 +664,8 @@ func (app *ScalerizeApp) First(tableCode uint8, cursorID [8]byte) ([]byte, error
 	return response, nil
 }
 
-// seek exact (sets the key to cursor to the exact key and return the key value pair)
-// or (just sets the iterator to the next greater one)
+// SeekExact: sets the key to cursor to the exact key and return the key value pair
+// if key does not exists then just sets the iterator to the next greater one
 // for dup-sorted tables it returns the value at the key and the smallest subkey lexicographically
 func (app *ScalerizeApp) SeekExact(tableCode uint8, cursorID [8]byte, key []byte) ([]byte, error) {
 	app.rwMutex.RLock()
@@ -695,7 +698,7 @@ func (app *ScalerizeApp) SeekExact(tableCode uint8, cursorID [8]byte, key []byte
 	return iterator.Value(), nil
 }
 
-// seek (sets the key to cursor to the (exact or next greater key) and return the key value pair)
+// Seek: (sets the key to cursor to the (exact or next greater key) and return the key value pair)
 // for dup-sorted tables it returns the value at the key and the smallest subkey lexicographically
 // and if key not exists it does the same for next greater key if exists
 // no need to add different logic for dup-sorted tables
@@ -726,7 +729,7 @@ func (app *ScalerizeApp) Seek(tableCode uint8, cursorID [8]byte, key []byte) ([]
 	return response, nil
 }
 
-// next returns the next from the current entry in the table, but if
+// Next: returns the next from the current entry in the table, but if
 // current key is not set of the cursor then first entry is returned
 // works the same for dup-sorted tables
 func (app *ScalerizeApp) Next(tableCode uint8, cursorID [8]byte) ([]byte, error) {
@@ -766,7 +769,7 @@ func (app *ScalerizeApp) Next(tableCode uint8, cursorID [8]byte) ([]byte, error)
 	return response, nil
 }
 
-// prev returns the previous from the current entry of the table but if
+// Prev: returns the previous from the current entry of the table but if
 // current key is not set then the last entry is returned
 // works the same for dup-sorted tables
 func (app *ScalerizeApp) Prev(tableCode uint8, cursorID [8]byte) ([]byte, error) {
@@ -801,7 +804,7 @@ func (app *ScalerizeApp) Prev(tableCode uint8, cursorID [8]byte) ([]byte, error)
 	return response, nil
 }
 
-// last gets the last entry in the table and sets the cursor to that key
+// Last: returns the last entry in the table and sets the cursor to that key
 // works the same for dup-sorted tables
 func (app *ScalerizeApp) Last(tableCode uint8, cursorID [8]byte) ([]byte, error) {
 	app.rwMutex.RLock()
@@ -830,6 +833,7 @@ func (app *ScalerizeApp) Last(tableCode uint8, cursorID [8]byte) ([]byte, error)
 	return response, nil
 }
 
+// Current: returns the current entry for the cursor
 func (app *ScalerizeApp) Current(tableCode uint8, cursorID [8]byte) ([]byte, error) {
 	app.rwMutex.RLock()
 	defer app.rwMutex.RUnlock()
@@ -860,7 +864,7 @@ func (app *ScalerizeApp) Current(tableCode uint8, cursorID [8]byte) ([]byte, err
 	return response, nil
 }
 
-// upsert is same as put but also set the cursor key
+// Upsert: same as put but also set the cursor key
 func (app *ScalerizeApp) Upsert(tableCode uint8, cursorID [8]byte, key, value []byte) error {
 	fmt.Println("ITERATOR POSITION BEFORE UPSERT: ", ethIteratorsCurrentKey[cursorID])
 
@@ -876,7 +880,7 @@ func (app *ScalerizeApp) Upsert(tableCode uint8, cursorID [8]byte, key, value []
 	return nil
 }
 
-// insert will insert a row at a given key. If the key is already
+// Insert: inserts a row at a given key. If the key is already
 // present, the operation will result in an error. And also set the cursor key
 // in case of dup-sorted tables also, if an entry exists for a KEY(not KEY+SUBKEY) it fails
 func (app *ScalerizeApp) Insert(tableCode uint8, cursorID [8]byte, key, value []byte) error {
@@ -916,7 +920,7 @@ func (app *ScalerizeApp) Insert(tableCode uint8, cursorID [8]byte, key, value []
 	return nil
 }
 
-// append stores new entries in the table, but:
+// Append: stores new entries in the table, but:
 // the key (only key not KEY+SUBKEY) should be
 // lexicographically equal or more than the greatest key present in the table
 // in regular table if key is same as the greatest key then the value is updated
@@ -950,18 +954,18 @@ func (app *ScalerizeApp) Append(tableCode uint8, cursorID [8]byte, k, value []by
 
 	greatestKeyPresent := iterator.Key()[:table.KeyBytes]
 	if bytes.Compare(key, greatestKeyPresent) < 0 {
-		return ErrCannotAppendIfKeyIsLessThanCurrrentGreatestKey
+		return ErrCannotAppendIfKeyIsLessThanCurrentGreatestKey
 	}
 
 	store.Set(k, value)
 	ethIteratorsCurrentKey[cursorID] = k
 
-	fmt.Println("ITERATOR POSITION BEFORE APPEND: ", ethIteratorsCurrentKey[cursorID])
+	fmt.Println("ITERATOR POSITION AFTER APPEND: ", ethIteratorsCurrentKey[cursorID])
 
 	return nil
 }
 
-// delete the current key for the cursor. If current key is not set than fails
+// DeleteCurrent: deletes the current key for the cursor. If current key is not set than fails
 // after deleting moves to next key
 // unset the cursor after deleting the current if current key is the last one
 func (app *ScalerizeApp) DeleteCurrent(tableCode uint8, cursorID [8]byte) error {
@@ -997,12 +1001,12 @@ func (app *ScalerizeApp) DeleteCurrent(tableCode uint8, cursorID [8]byte) error 
 		ethIteratorsCurrentKey[cursorID] = iterator.Key()
 	}
 
-	fmt.Println("ITERATOR POSITION BEFORE DELETE CURRENT: ", ethIteratorsCurrentKey[cursorID])
+	fmt.Println("ITERATOR POSITION AFTER DELETE CURRENT: ", ethIteratorsCurrentKey[cursorID])
 
 	return nil
 }
 
-// next_dup returns the next entry with same key (not key+subkey)
+// NextDup: returns the next entry with same key (not key+subkey)
 // if next entry is not with the same key then it return None
 func (app *ScalerizeApp) NextDup(onlyVal bool, tableCode uint8, cursorID [8]byte) ([]byte, error) {
 	app.rwMutex.RLock()
@@ -1066,7 +1070,7 @@ func (app *ScalerizeApp) NextDup(onlyVal bool, tableCode uint8, cursorID [8]byte
 	return response, nil
 }
 
-// next_no_dup returns the first entry for the next key(not key+subkey)
+// NextNoDup: returns the first entry for the next key(not key+subkey)
 // if current key is greatest then return nil
 func (app *ScalerizeApp) NextNoDup(tableCode uint8, cursorID [8]byte) ([]byte, error) {
 	app.rwMutex.RLock()
@@ -1107,13 +1111,13 @@ func (app *ScalerizeApp) NextNoDup(tableCode uint8, cursorID [8]byte) ([]byte, e
 	return response, nil
 }
 
-// seek_by_key_subkey returns only value
-// positions the cursor at the entry greater than or equal to the provided key/subkey pair
-// if key(not key+subkey) does not exists, then returns nil
-// if key exists but subkey is greater than the greatest subkey for that key, then returns nil
+// SeekByKeySubkey: returns value for a key/subkey
 // if key and subkey exists, it returns value at that entry
-// if key exists and subkey does not exists, then it returns the next greater key/subkey pair for that key
-func (app *ScalerizeApp) SeekByKeySubkey(tableCode uint8, cursorID [8]byte, k []byte) ([]byte, error) {
+// if key(not key+subkey) not exists, returns nil but sets the cursor to next entry in the table if exists
+// if key exists but subkey does not exists, their are 2 cases:
+// 1. if subkey is greater than the greatest subkey for that key, then returns nil but sets the cursor to next entry in the table if exists
+// 2. if not, returns the next entry for the key/subkey lexicographically
+func (app *ScalerizeApp) SeekByKeySubkey(tableCode uint8, cursorID [8]byte, key []byte) ([]byte, error) {
 	app.rwMutex.RLock()
 	defer app.rwMutex.RUnlock()
 
@@ -1128,20 +1132,130 @@ func (app *ScalerizeApp) SeekByKeySubkey(tableCode uint8, cursorID [8]byte, k []
 		return nil, ErrInvalidRequestData
 	}
 
-	key := k[:table.KeyBytes]
-	iterator := app.CommitMultiStore().GetCommitKVStore(table.StoreKey).Iterator(k, storetypes.PrefixEndBytes(key))
+	iterator := app.CommitMultiStore().GetCommitKVStore(table.StoreKey).Iterator(key, nil)
 	defer iterator.Close()
 
 	if !iterator.Valid() {
-		fmt.Println("KEY DOES NOT EXISTS")
+		fmt.Println("KEYSUBKEY CASE 1")
+		delete(ethIteratorsCurrentKey, cursorID)
 		return nil, nil
 	}
 
 	ethIteratorsCurrentKey[cursorID] = iterator.Key()
 	fmt.Println("ITERATOR POSITION AFTER SEEK BY KEY SUBKEY: ", ethIteratorsCurrentKey[cursorID])
 
+	if !bytes.HasPrefix(iterator.Key(), key[:table.KeyBytes]) {
+		fmt.Println("KEYSUBKEY CASE 2")
+		return nil, nil
+	}
+
+	fmt.Println("KEYSUBKEY CASE 3")
+
 	response := append(iterator.Key()[table.KeyBytes:], iterator.Value()...)
 	return response, nil
+}
+
+// DeleteCurrentDuplicates: deletes all entries for current key(not key+subkey)
+// if their is not next key, then unset the cursor
+// fail if cursor is not set
+func (app *ScalerizeApp) DeleteCurrentDuplicates(tableCode uint8, cursorID [8]byte) error {
+	app.rwMutex.Lock()
+	defer app.rwMutex.Unlock()
+
+	fmt.Println("ITERATOR POSITION BEFORE DELETE CURRENT DUPLICATES: ", ethIteratorsCurrentKey[cursorID])
+
+	table, ok := app.executionTablesInfo[tableCode]
+	if !ok {
+		return ErrTableNotFound
+	}
+
+	if !table.DupSorted {
+		return ErrInvalidRequestData
+	}
+
+	currentKey, ok := ethIteratorsCurrentKey[cursorID]
+	if !ok {
+		return ErrCurrentKeyIsNotSet
+	}
+
+	key := currentKey[:table.KeyBytes]
+	store := app.executionCacheMultistore.GetKVStore(table.StoreKey)
+
+	iterator := store.Iterator(key, storetypes.PrefixEndBytes(key))
+	defer iterator.Close()
+
+	if !iterator.Valid() {
+		return ErrCurrentIteratorKeyIsInvalid
+	}
+
+	for ; iterator.Valid(); iterator.Next() {
+		store.Delete(iterator.Key())
+	}
+
+	nextIterator := store.Iterator(storetypes.PrefixEndBytes(key), nil)
+	defer nextIterator.Close()
+
+	if !nextIterator.Valid() {
+		delete(ethIteratorsCurrentKey, cursorID)
+	} else {
+		ethIteratorsCurrentKey[cursorID] = nextIterator.Key()
+	}
+
+	fmt.Println("ITERATOR POSITION AFTER DELETE CURRENT DUPLICATES: ", ethIteratorsCurrentKey[cursorID])
+
+	return nil
+}
+
+// AppendDup: appends new entry in the table
+// if key exists: the subkey specified should be equal to or more than greatest subkey for that key
+// if key not exists: just add the new entry
+func (app *ScalerizeApp) AppendDup(tableCode uint8, cursorID [8]byte, k, value []byte) error {
+	app.rwMutex.Lock()
+	defer app.rwMutex.Unlock()
+
+	fmt.Println("ITERATOR POSITION BEFORE APPEND DUP: ", ethIteratorsCurrentKey[cursorID])
+
+	table, ok := app.executionTablesInfo[tableCode]
+	if !ok {
+		return ErrTableNotFound
+	}
+
+	if !table.DupSorted {
+		return ErrInvalidRequestData
+	}
+
+	key := k[:table.KeyBytes]
+	subkey := k[table.KeyBytes:]
+	store := app.executionCacheMultistore.GetKVStore(table.StoreKey)
+
+	iterator := store.ReverseIterator(key, storetypes.PrefixEndBytes(key))
+	defer iterator.Close()
+
+	if !iterator.Valid() {
+		fmt.Println("APPEND DUP CASE 1")
+		store.Set(k, value)
+		ethIteratorsCurrentKey[cursorID] = k
+	} else {
+		greatestSubkey := iterator.Key()[table.KeyBytes:]
+		fmt.Println("SUBKEY: ", subkey)
+		fmt.Println("GREATEST SUBKEY: ", greatestSubkey)
+
+		if bytes.Compare(subkey, greatestSubkey) < 0 {
+			fmt.Println("APPEND DUP CASE 2")
+			return ErrCannotAppendDupIfSubkeyIsLessThanGreatestSubKeyForKey
+		}
+
+		fmt.Println("COMPARE: ", bytes.Compare(subkey, greatestSubkey))
+		fmt.Println("APPEND DUP CASE 3")
+		store.Set(k, value)
+
+		ethIteratorsCurrentKey[cursorID] = iterator.Key()
+
+	}
+
+	fmt.Println("ITERATOR POSITION AFTER APPEND DUP: ", ethIteratorsCurrentKey[cursorID])
+
+	return nil
 }
 
 func (app *ScalerizeApp) writeToConn(conn net.Conn, response []byte) {
