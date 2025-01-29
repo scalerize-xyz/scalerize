@@ -1,5 +1,7 @@
 package app
 
+var ethIteratorsCurrentKey = make(map[[CursorIDBytes]byte][]byte)
+
 const (
 	// DbTx and DbTxMut for both regular and dup-sorted tables
 	OP_PUT    byte = 1
@@ -33,6 +35,20 @@ const (
 	OP_APPEND_DUP                byte = 21
 
 	OP_DROP_CURSOR byte = 16
+)
+
+const (
+	HashedAccountsStoreName = "hashed_accounts"
+	HashedStoragesStoreName = "hashed_storages"
+
+	HashedAccountsTableCode = 0
+	HashedStoragesTableCode = 1
+
+	HashedAccountsKeyBytes    = 32
+	HashedStoragesKeyBytes    = 32
+	HashedStoragesSubKeyBytes = 32
+
+	CursorIDBytes = 8
 )
 
 const (

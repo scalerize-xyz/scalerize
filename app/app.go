@@ -85,7 +85,7 @@ type ScalerizeApp struct {
 	// simulation manager
 	sm *module.SimulationManager
 
-	executionTablesInfo      map[uint8]TableInfo
+	executionTablesInfo      map[uint8]tableInfo
 	executionCacheMultistore storetypes.CacheMultiStore
 	rwMutex                  sync.RWMutex
 }
@@ -200,7 +200,7 @@ func NewScalerizeApp(
 			return nil, err
 		}
 
-		app.executionTablesInfo = map[uint8]TableInfo{
+		app.executionTablesInfo = map[uint8]tableInfo{
 			HashedAccountsTableCode: {
 				DupSorted: false,
 				KeyBytes:  32,
