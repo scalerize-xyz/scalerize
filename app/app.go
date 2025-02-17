@@ -203,13 +203,13 @@ func NewScalerizeApp(
 		app.executionTablesInfo = map[uint8]tableInfo{
 			HashedAccountsTableCode: {
 				DupSorted: false,
-				KeyBytes:  32,
+				KeyBytes:  SerializedHashedAccountsKeyBytes,
 				StoreKey:  storetypes.NewKVStoreKey(HashedAccountsStoreName),
 			},
 			HashedStoragesTableCode: {
 				DupSorted:   true,
-				KeyBytes:    32,
-				SubKeyBytes: 32,
+				KeyBytes:    SerializedHashedStoragesKeyBytes,
+				SubKeyBytes: SerializedHashedStoragesSubKeyBytes,
 				StoreKey:    storetypes.NewKVStoreKey(HashedStoragesStoreName),
 			},
 		}
@@ -269,6 +269,13 @@ func NewScalerizeApp(
 	fmt.Printf("Registered GRPC Router: %+v\n", app.GRPCQueryRouter())
 
 	go app.StartDBRouter()
+	go func() {
+		for {
+			time.Sleep(10 * time.Second)
+			fmt.Println("HERE BEFORE WRITE: ", app.CommitMultiStore().WorkingHash())
+			fmt.Println("HERE LAST COMMIT APP HASH BEFORE WRITE: ", app.CommitMultiStore().LastCommitID().Hash)
+		}
+	}()
 
 	for _, key := range app.GetStoreKeys() {
 		fmt.Println("STORE KEYS: ", key.Name())

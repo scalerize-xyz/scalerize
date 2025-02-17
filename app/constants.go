@@ -44,9 +44,9 @@ const (
 	HashedAccountsTableCode = 0
 	HashedStoragesTableCode = 1
 
-	HashedAccountsKeyBytes    = 32
-	HashedStoragesKeyBytes    = 32
-	HashedStoragesSubKeyBytes = 32
+	SerializedHashedAccountsKeyBytes    = 40
+	SerializedHashedStoragesKeyBytes    = 40
+	SerializedHashedStoragesSubKeyBytes = 40
 
 	CursorIDBytes = 8
 )
