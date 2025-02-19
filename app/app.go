@@ -9,21 +9,31 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aerius-labs/scalerize/abci"
+	scalerizeabci "github.com/aerius-labs/scalerize/abci"
 	evmexec "github.com/aerius-labs/scalerize/execution/evm"
+	evmtypes "github.com/aerius-labs/scalerize/x/evm/types"
+
+	abci "github.com/cometbft/cometbft/abci/types"
+	crypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
+	"github.com/cometbft/cometbft/rpc/client/http"
 	dbm "github.com/cosmos/cosmos-db"
+
+	// cosmossdkclient "github.com/cosmos/cosmos-sdk/client"
+	// "github.com/cosmos/cosmos-sdk/codec/types"
 
 	"cosmossdk.io/core/appconfig"
 	"cosmossdk.io/depinject"
 	"cosmossdk.io/log"
+	"cosmossdk.io/store"
+	"cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
 
 	clienthelpers "cosmossdk.io/client/v2/helpers"
 	evmkeeper "github.com/aerius-labs/scalerize/x/evm/keeper"
-	evmtypes "github.com/aerius-labs/scalerize/x/evm/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/codec/types"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
 	"github.com/cosmos/cosmos-sdk/server"
@@ -123,10 +133,11 @@ func NewScalerizeApp(
 	baseAppOptions ...func(*baseapp.BaseApp),
 ) (*ScalerizeApp, error) {
 	var (
-		app         = &ScalerizeApp{}
-		appBuilder  *runtime.AppBuilder
-		abciHandler abci.ABCIHandler
-		ctx         = context.Background()
+		app                   = &ScalerizeApp{}
+		appBuilder            *runtime.AppBuilder
+		abciHandler           scalerizeabci.ABCIHandler
+		ctx                   = context.Background()
+		ensureClientCreatedCh = make(chan bool)
 	)
 
 	if err := depinject.Inject(
@@ -185,15 +196,12 @@ func NewScalerizeApp(
 		if err != nil {
 			return nil, err
 		}
-		ensureClientCreatedCh := make(chan bool)
 
 		go func() {
 			if err := evmClient.Start(ctx, ensureClientCreatedCh); err != nil {
 				panic(err)
 			}
 		}()
-
-		<-ensureClientCreatedCh
 
 		if abciHandler, err = evmexec.NewEVMABCIHandler(ctx, evmClient); err != nil {
 			app.Logger().Error("failed to create EVM ABCI Handler")
@@ -269,17 +277,19 @@ func NewScalerizeApp(
 	fmt.Printf("Registered GRPC Router: %+v\n", app.GRPCQueryRouter())
 
 	go app.StartDBRouter()
-	go func() {
-		for {
-			time.Sleep(10 * time.Second)
-			fmt.Println("HERE BEFORE WRITE: ", app.CommitMultiStore().WorkingHash())
-			fmt.Println("HERE LAST COMMIT APP HASH BEFORE WRITE: ", app.CommitMultiStore().LastCommitID().Hash)
-		}
-	}()
+	// go func() {
+	// 	for {
+	// 		time.Sleep(10 * time.Second)
+	// 		fmt.Println("HERE BEFORE WRITE: ", app.CommitMultiStore().WorkingHash())
+	// 		fmt.Println("HERE LAST COMMIT APP HASH BEFORE WRITE: ", app.CommitMultiStore().LastCommitID().Hash)
+	// 	}
+	// }()
 
 	for _, key := range app.GetStoreKeys() {
 		fmt.Println("STORE KEYS: ", key.Name())
 	}
+
+	<-ensureClientCreatedCh
 
 	return app, nil
 }
@@ -323,4 +333,77 @@ func (app *ScalerizeApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.
 	if err := server.RegisterSwaggerAPI(apiSvr.ClientCtx, apiSvr.Router, apiConfig.Swagger); err != nil {
 		panic(err)
 	}
+}
+
+func CreateCometBFTClient(rpcEndpoint string) (*http.HTTP, error) {
+	client, err := http.New(rpcEndpoint, "/websocket")
+	if err != nil {
+		return nil, err
+	}
+
+	// Optionally, you can start the client
+	err = client.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	return client, nil
+}
+
+func CreateCosmosClient(cometBFTClient *http.HTTP) (client.Context, error) {
+	interfaceRegistry := types.NewInterfaceRegistry()
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	// Create the client context
+	clientCtx := client.Context{}.
+		WithClient(cometBFTClient).
+		WithCodec(marshaler).
+		WithInterfaceRegistry(interfaceRegistry)
+
+	return clientCtx, nil
+}
+
+func GetProof(clientCtx client.Context, storeKey string, key []byte) ([]byte, *crypto.ProofOps, error) {
+	height := clientCtx.Height
+	// ABCI queries at height less than or equal to 2 are not supported.
+	// Base app does not support queries for height less than or equal to 1.
+	// Therefore, a query at height 2 would be equivalent to a query at height 3
+	if height <= 2 {
+		return nil, nil, fmt.Errorf("proof queries at height <= 2 are not supported")
+	}
+
+	abciReq := abci.RequestQuery{
+		Path:   fmt.Sprintf("store/%s/key", storeKey),
+		Data:   key,
+		Height: height,
+		Prove:  true,
+	}
+
+	abciRes, err := clientCtx.QueryABCI(abciReq)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return abciRes.Value, abciRes.ProofOps, nil
+}
+
+func (app *ScalerizeApp) InitializeCommitMultiStore(db dbm.DB, logger log.Logger, metricGatherer metrics.StoreMetrics) error {
+	// Initialize the CommitMultiStore
+	cms := store.NewCommitMultiStore(db, logger, metricGatherer)
+
+	// Mount necessary stores
+	for _, table := range app.executionTablesInfo {
+		cms.MountStoreWithDB(table.StoreKey, storetypes.StoreTypeIAVL, db)
+	}
+
+	// Load the latest version
+	err := cms.LoadLatestVersion()
+	if err != nil {
+		return err
+	}
+
+	// Set the CommitMultiStore
+	app.SetCMS(cms)
+
+	return nil
 }

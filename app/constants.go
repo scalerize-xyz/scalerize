@@ -1,6 +1,11 @@
 package app
 
-var ethIteratorsCurrentKey = make(map[[CursorIDBytes]byte][]byte)
+import "sync"
+
+var (
+	ethIteratorsCurrentKey     = make(map[[CursorIDBytes]byte][]byte)
+	ethIteratorsCurrentKeyLock sync.RWMutex
+)
 
 const (
 	// DbTx and DbTxMut for both regular and dup-sorted tables
