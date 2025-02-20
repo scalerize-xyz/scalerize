@@ -5,21 +5,14 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
-	"math/big"
 	"sync"
-	"time"
 
-	scalerizeabci "github.com/aerius-labs/scalerize/abci"
-	evmexec "github.com/aerius-labs/scalerize/execution/evm"
 	evmtypes "github.com/aerius-labs/scalerize/x/evm/types"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	crypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
 	"github.com/cometbft/cometbft/rpc/client/http"
 	dbm "github.com/cosmos/cosmos-db"
-
-	// cosmossdkclient "github.com/cosmos/cosmos-sdk/client"
-	// "github.com/cosmos/cosmos-sdk/codec/types"
 
 	"cosmossdk.io/core/appconfig"
 	"cosmossdk.io/depinject"
@@ -135,7 +128,6 @@ func NewScalerizeApp(
 	var (
 		app                   = &ScalerizeApp{}
 		appBuilder            *runtime.AppBuilder
-		abciHandler           scalerizeabci.ABCIHandler
 		ctx                   = context.Background()
 		ensureClientCreatedCh = make(chan bool)
 	)
@@ -163,78 +155,24 @@ func NewScalerizeApp(
 	}
 
 	socketPath = appOpts.Get(params.FlagSocketPath).(string)
-	clientType := appOpts.Get(params.FlagExecutionClientType).(string)
 
-	switch clientType {
-	case evmexec.EVM:
-		engineAPIURL := appOpts.Get(params.FlagExecutionEngineURL).(string)
-		rpcURL := appOpts.Get(params.FlagRPCURL).(string)
-		jwtSecretPath := appOpts.Get(params.FlagExecutionEngineJWTSecretPath).(string)
-		rpcJWTRefreshInterval, err := time.ParseDuration(appOpts.Get(params.FlagRPCJWTRefreshInterval).(string))
-		if err != nil {
-			return nil, err
-		}
-
-		rpcCheckInterval, err := time.ParseDuration(appOpts.Get(params.FlagRPCCheckInterval).(string))
-		if err != nil {
-			return nil, err
-		}
-
-		strEthChainID := appOpts.Get(params.FlagEthChainID).(string)
-		ethChainID := new(big.Int)
-		_, ok := ethChainID.SetString(strEthChainID, 0)
-		if !ok {
-			return nil, fmt.Errorf("failed to convert eth chainID to big.Int")
-		}
-
-		evmConfig, err := evmexec.NewEVMConfig(ethChainID, rpcJWTRefreshInterval, rpcCheckInterval, engineAPIURL, rpcURL, jwtSecretPath)
-		if err != nil {
-			return nil, err
-		}
-
-		evmClient, err := evmexec.NewEVMClient(ctx, evmConfig, logger)
-		if err != nil {
-			return nil, err
-		}
-
-		go func() {
-			if err := evmClient.Start(ctx, ensureClientCreatedCh); err != nil {
-				panic(err)
-			}
-		}()
-
-		if abciHandler, err = evmexec.NewEVMABCIHandler(ctx, evmClient); err != nil {
-			app.Logger().Error("failed to create EVM ABCI Handler")
-			return nil, err
-		}
-
-		app.executionTablesInfo = map[uint8]tableInfo{
-			HashedAccountsTableCode: {
-				DupSorted: false,
-				KeyBytes:  SerializedHashedAccountsKeyBytes,
-				StoreKey:  storetypes.NewKVStoreKey(HashedAccountsStoreName),
-			},
-			HashedStoragesTableCode: {
-				DupSorted:   true,
-				KeyBytes:    SerializedHashedStoragesKeyBytes,
-				SubKeyBytes: SerializedHashedStoragesSubKeyBytes,
-				StoreKey:    storetypes.NewKVStoreKey(HashedStoragesStoreName),
-			},
-		}
-
-	default:
-		return nil, fmt.Errorf("invalid execution client type")
+	executionClient, err := app.NewClient(ctx, appOpts, logger)
+	if err != nil {
+		return nil, err
 	}
 
+	go func() {
+		if err := executionClient.Start(ctx, ensureClientCreatedCh); err != nil {
+			panic(err)
+		}
+	}()
+
 	baseAppOptions = append(baseAppOptions, func(ba *baseapp.BaseApp) {
-		ba.SetPrepareProposal(abciHandler.PrepareProposal())
-		ba.SetProcessProposal(abciHandler.ProcessProposal())
-		ba.SetPreBlocker(abciHandler.PreBlock())
-		ba.SetEndBlocker(abciHandler.EndBlock())
+		ba.SetPrepareProposal(executionClient.PrepareProposal())
+		ba.SetProcessProposal(executionClient.ProcessProposal())
+		ba.SetPreBlocker(executionClient.PreBlock())
+		ba.SetEndBlocker(executionClient.EndBlock())
 		ba.SetMempool(mempool.NoOpMempool{})
-		// ba.SetBeginBlocker(abciHandler.BeginBlocker())
-		// ba.SetExtendVoteHandler(abciHandler.ExtendVote())
-		// ba.SetVerifyVoteExtensionHandler(abciHandler.VerifyVoteExtension())
 	})
 
 	app.App = appBuilder.Build(db, traceStore, baseAppOptions...)
@@ -265,32 +203,9 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
-	for i := range app.ModuleManager.Modules {
-		fmt.Println("MODULE: ", i)
-	}
-
-	for _, k := range app.GetStoreKeys() {
-		fmt.Println("STORE KEYS: ", k)
-	}
-
-	fmt.Printf("Registered Message Router: %+v\n", app.MsgServiceRouter())
-	fmt.Printf("Registered GRPC Router: %+v\n", app.GRPCQueryRouter())
-
-	go app.StartDBRouter()
-	// go func() {
-	// 	for {
-	// 		time.Sleep(10 * time.Second)
-	// 		fmt.Println("HERE BEFORE WRITE: ", app.CommitMultiStore().WorkingHash())
-	// 		fmt.Println("HERE LAST COMMIT APP HASH BEFORE WRITE: ", app.CommitMultiStore().LastCommitID().Hash)
-	// 	}
-	// }()
-
-	for _, key := range app.GetStoreKeys() {
-		fmt.Println("STORE KEYS: ", key.Name())
-	}
+	go app.StartDBRouter(appOpts.Get(params.FlagExecutionClientType).(string))
 
 	<-ensureClientCreatedCh
-
 	return app, nil
 }
 

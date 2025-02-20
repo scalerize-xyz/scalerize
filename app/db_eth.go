@@ -5,52 +5,16 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 
 	storetypes "cosmossdk.io/store/types"
 )
 
-func (app *ScalerizeApp) StartDBRouter() {
-	// fmt.Println("BEFORE WRITE: ", app.CommitMultiStore().WorkingHash())
-	// fmt.Println("LAST COMMIT APP HASH BEFORE WRITE: ", app.CommitMultiStore().LastCommitID().Hash)
-	// fmt.Println("CURRENT COMMIT APP HASH BEFORE WRITE: ", app.CommitMultiStore().Commit().Hash)
-	os.Remove(socketPath)
-
-	app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
-
-	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: socketPath, Net: "unix"})
-	if err != nil {
-		panic(err)
-	}
-	defer l.Close()
-
-	// app.Logger().Info("Listening on: ", socketPath)
-
-	for {
-		fmt.Println("CONNECTING TO UNIX SOCKET SERVER FOR DB")
-		conn, err := l.Accept()
-		if err != nil {
-			// app.Logger().Error("Error accepting connection to Scalerize DB Router: ", err)
-			continue
-		}
-
-		// app.Logger().Info("New client connected to Scalerize Database Router")
-
-		fmt.Println("New client connected to Scalerize Database Router")
-
-		go app.handleConnection(conn)
-	}
-}
-
-func (app *ScalerizeApp) handleConnection(conn net.Conn) {
+func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 	defer conn.Close()
 
 	fmt.Println("STARTING HANDLING CONNECTION")
 
 	for {
-		// fmt.Println("HERE1 BW: ", app.CommitMultiStore().WorkingHash())
-		// fmt.Println("HERE1 LAST COMMIT APP HASH BW: ", app.CommitMultiStore().LastCommitID().Hash)
-
 		var (
 			response  []byte
 			tableCode uint8
@@ -81,12 +45,6 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 
 		tableCode = uint8(data[1])
 		fmt.Println("TABLE CODE: ", tableCode)
-
-		// if _, ok := app.executionTablesInfo[tableCode]; !ok {
-		// 	response = append([]byte{STATUS_ERROR}, []byte(ErrTableNotFound.Error())...)
-		// 	app.writeToConn(conn, response)
-		// 	continue
-		// }
 
 		if _, err := app.getTable(tableCode); err != nil {
 			response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
@@ -461,27 +419,6 @@ func (app *ScalerizeApp) handleConnection(conn net.Conn) {
 			} else {
 				response = append([]byte{STATUS_SUCCESS}, resp...)
 			}
-
-		// case OP_NEXT_DUP_VAL:
-		// 	table := app.executionTablesInfo[tableCode]
-		// 	if !table.DupSorted {
-		// 		response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
-		// 		break
-		// 	}
-
-		// 	if len(data) != 2+CursorIDBytes {
-		// 		response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
-		// 		break
-		// 	}
-
-		// 	var cursorId [8]byte
-		// 	copy(cursorId[:], data[2:2+CursorIDBytes])
-		// 	resp, err := app.NextDup(true, tableCode, cursorId)
-		// 	if err != nil {
-		// 		response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
-		// 	} else {
-		// 		response = append([]byte{STATUS_SUCCESS}, resp...)
-		// 	}
 
 		case OP_SEEK_BY_KEY_SUBKEY:
 			table := app.executionTablesInfo[tableCode]

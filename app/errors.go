@@ -3,6 +3,7 @@ package app
 import "errors"
 
 var (
+	ErrInvalidExecutionClient                                = errors.New("invalid execution client type")
 	ErrInvalidRequestData                                    = errors.New("invalid request data")
 	ErrDataNotFound                                          = errors.New("data not found")
 	ErrInvalidOperationCode                                  = errors.New("invalid operation code")
