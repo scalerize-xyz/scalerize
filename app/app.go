@@ -7,8 +7,6 @@ import (
 	"io"
 	"sync"
 
-	evmtypes "github.com/aerius-labs/scalerize/x/evm/types"
-
 	abci "github.com/cometbft/cometbft/abci/types"
 	crypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
 	"github.com/cometbft/cometbft/rpc/client/http"
@@ -22,7 +20,6 @@ import (
 	storetypes "cosmossdk.io/store/types"
 
 	clienthelpers "cosmossdk.io/client/v2/helpers"
-	evmkeeper "github.com/aerius-labs/scalerize/x/evm/keeper"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -83,7 +80,6 @@ type ScalerizeApp struct {
 	StakingKeeper         *stakingkeeper.Keeper
 	DistrKeeper           distrkeeper.Keeper
 	ConsensusParamsKeeper consensuskeeper.Keeper
-	EVMKeeper             evmkeeper.Keeper
 
 	// simulation manager
 	sm *module.SimulationManager
@@ -179,10 +175,6 @@ func NewScalerizeApp(
 
 	// register streaming services
 	if err := app.RegisterStreamingServices(appOpts, app.kvStoreKeys()); err != nil {
-		return nil, err
-	}
-
-	if err := app.RegisterStores(evmtypes.EVMStoreKey); err != nil {
 		return nil, err
 	}
 

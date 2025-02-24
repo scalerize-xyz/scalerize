@@ -818,7 +818,7 @@ func (app *ScalerizeApp) Current(tableCode uint8, cursorID [8]byte) ([]byte, err
 	}
 
 	ethIteratorsCurrentKeyLock.RLock()
-	defer app.rwMutex.RUnlock()
+	defer ethIteratorsCurrentKeyLock.RUnlock()
 	currentKey, ok := ethIteratorsCurrentKey[cursorID]
 	if !ok {
 		return nil, ErrCurrentKeyIsNotSet
