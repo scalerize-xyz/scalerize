@@ -13,7 +13,7 @@ const (
 	DefaultJWTSecretPath         = "./jwt.hex"
 	DefaultRPCCheckInterval      = 3 * time.Second
 	DefaultEthChainID            = "80087"
-	DefaultSocketPath            = "/tmp/scalerize"
+	DefaultSocketPath            = "/tmp/ipc/scalerize.sock"
 )
 
 type EVMConfig struct {

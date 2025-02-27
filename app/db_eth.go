@@ -41,10 +41,10 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 		data := buffer[:n]
 
 		operation := data[0]
-		fmt.Println("OPERATION: ", operation)
+		// fmt.Println("OPERATION: ", operation)
 
 		tableCode = uint8(data[1])
-		fmt.Println("TABLE CODE: ", tableCode)
+		// fmt.Println("TABLE CODE: ", tableCode)
 
 		if _, err := app.getTable(tableCode); err != nil {
 			response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
@@ -171,10 +171,10 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 			value, err := app.SeekExact(tableCode, cursorId, key)
 			if err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
-				fmt.Println("SEEK EXACT RESPONSE: ", response)
+				// fmt.Println("SEEK EXACT RESPONSE: ", response)
 			} else {
 				response = append([]byte{STATUS_SUCCESS}, value...)
-				fmt.Println("SEEK EXACT RESPONSE: ", response)
+				// fmt.Println("SEEK EXACT RESPONSE: ", response)
 			}
 
 		case OP_SEEK:
@@ -194,7 +194,7 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
 			} else {
 				response = append([]byte{STATUS_SUCCESS}, resp...)
-				fmt.Println("SEEK RESPONSE: ", response)
+				// fmt.Println("SEEK RESPONSE: ", response)
 			}
 
 		case OP_NEXT:
@@ -565,10 +565,10 @@ func (app *ScalerizeApp) Delete(tableCode uint8, key []byte, keyIncludesSubkey b
 
 		iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(key, storetypes.PrefixEndBytes(key))
 		defer iterator.Close()
-		fmt.Println("KEY: ", key)
+		// fmt.Println("KEY: ", key)
 
 		for ; iterator.Valid(); iterator.Next() {
-			fmt.Println("DELETE KEY: ", iterator.Key())
+			// fmt.Println("DELETE KEY: ", iterator.Key())
 			store.Delete(iterator.Key())
 		}
 
@@ -842,7 +842,7 @@ func (app *ScalerizeApp) Current(tableCode uint8, cursorID [8]byte) ([]byte, err
 func (app *ScalerizeApp) Upsert(tableCode uint8, cursorID [8]byte, key, value []byte) error {
 	// fmt.Println("ITERATOR POSITION BEFORE UPSERT: ", ethIteratorsCurrentKey[cursorID])
 
-	fmt.Println("UPSERT KEY: ", key)
+	// fmt.Println("UPSERT KEY: ", key)
 	if err := app.Put(tableCode, key, value); err != nil {
 		return err
 	}

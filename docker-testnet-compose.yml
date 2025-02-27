@@ -3,7 +3,7 @@ version: "3"
 services:
   scalerizednode0:
     container_name: scalerizednode0
-    image: "scalerized/node"
+    image: "scalerize/node"
     ports:
       - "26657:26657"
       - "8544:8545"
@@ -15,7 +15,7 @@ services:
       - ENGINE_API=http://172.20.0.6:8551
       - RPC_API=http://172.20.0.6:8545
     volumes:
-      - ./localnet-setup/node0/scalerized:/scalerize:Z
+      - shared-volume-node0:/tmp/ipc
     networks:
       scalerize-net:
         ipv4_address: 172.20.0.2
@@ -24,7 +24,7 @@ services:
 
   scalerizednode1:
     container_name: scalerizednode1
-    image: "scalerized/node"
+    image: "scalerize/node"
     ports:
       - "26658:26657"
       - "8555:8545"
@@ -35,9 +35,8 @@ services:
       - LOG=${LOG:-scalerized.log}
       - ENGINE_API=http://172.20.0.7:8551
       - RPC_API=http://172.20.0.7:8545
-
     volumes:
-      - ./localnet-setup/node1/scalerized:/scalerize:Z
+      - shared-volume-node1:/tmp/ipc
     networks:
       scalerize-net:
         ipv4_address: 172.20.0.3
@@ -46,7 +45,7 @@ services:
 
   scalerizednode2:
     container_name: scalerizednode2
-    image: "scalerized/node"
+    image: "scalerize/node"
     environment:
       - ID=2
       - LOG=${LOG:-scalerized.log}
@@ -59,7 +58,7 @@ services:
       - "8566:8546"
       - "8127:8125"
     volumes:
-      - ./localnet-setup/node2/scalerized:/scalerize:Z
+      - shared-volume-node2:/tmp/ipc
     networks:
       scalerize-net:
         ipv4_address: 172.20.0.4
@@ -67,7 +66,7 @@ services:
 
   scalerizednode3:
     container_name: scalerizednode3
-    image: "scalerized/node"
+    image: "scalerize/node"
     environment:
       - ID=3
       - LOG=${LOG:-scalerized.log}
@@ -80,7 +79,7 @@ services:
       - "8576:8546"
       - "8128:8125"
     volumes:
-      - ./localnet-setup/node3/scalerized:/scalerize:Z
+      - shared-volume-node3:/tmp/ipc
     networks:
       scalerize-net:
         ipv4_address: 172.20.0.5
@@ -88,14 +87,14 @@ services:
 
   reth-bootnode:
     container_name: reth-bootnode
-    image: "reth/node"  
+    image: "bornpsych/reth"  
     ports:
       - "8551:8551"
       - "8545:8545"
       - "30303:30303"
     env_file: "reth.env"
     volumes:
-      - ./localnet-setup/node0/scalerized:/scalerize:Z
+      - shared-volume-node0:/tmp/ipc
     networks:
       scalerize-net:
         ipv4_address: 172.20.0.6
@@ -103,7 +102,7 @@ services:
 
   rethnode0:
     container_name: rethnode0
-    image: "reth/node"
+    image: "bornpsych/reth"
     environment:
       - BOOTNODE_IP=172.20.0.6
       - BOOTNODE_RPC_PORT=8545
@@ -114,7 +113,7 @@ services:
       - "30304:30303"
     env_file: "reth.env"
     volumes:
-      - ./localnet-setup/node0/scalerized:/scalerize:Z
+      - shared-volume-node1:/tmp/ipc
     networks:
       scalerize-net:
         ipv4_address: 172.20.0.7
@@ -122,7 +121,7 @@ services:
 
   rethnode1:
     container_name: rethnode1
-    image: "reth/node"
+    image: "bornpsych/reth"
     environment:
       - BOOTNODE_IP=172.20.0.6
       - BOOTNODE_RPC_PORT=8545
@@ -132,7 +131,7 @@ services:
       - "30305:30303"
     env_file: "reth.env"
     volumes:
-      - ./localnet-setup/node0/scalerized:/scalerize:Z
+      - shared-volume-node2:/tmp/ipc
     networks:
       scalerize-net:
         ipv4_address: 172.20.0.8
@@ -140,7 +139,7 @@ services:
 
   rethnode2:
     container_name: rethnode2
-    image: "reth/node"
+    image: "bornpsych/reth"
     environment:
       - BOOTNODE_IP=172.20.0.6
       - BOOTNODE_RPC_PORT=8545
@@ -150,7 +149,7 @@ services:
       - "30306:30303"
     env_file: "reth.env"
     volumes:
-      - ./localnet-setup/node0/scalerized:/scalerize:Z
+      - shared-volume-node3:/tmp/ipc
     networks:
       scalerize-net:
         ipv4_address: 172.20.0.9
@@ -162,3 +161,9 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
+
+volumes:
+  shared-volume-node0:
+  shared-volume-node1:
+  shared-volume-node2:
+  shared-volume-node3:

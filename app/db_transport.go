@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 
 	evmexec "github.com/aerius-labs/scalerize/execution/evm"
 )
@@ -23,6 +24,9 @@ func (app *ScalerizeApp) StartDBRouter(clientType string) {
 	}
 
 	app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
+	if err := os.MkdirAll(filepath.Dir(socketPath), 0755); err != nil {
+		panic(fmt.Errorf("failed to create socket directory: %w", err))
+	}
 
 	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: socketPath, Net: "unix"})
 	if err != nil {

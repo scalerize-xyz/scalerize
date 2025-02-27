@@ -76,6 +76,7 @@ func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 
 		fmt.Printf("PAYLOAD EXECUTABLE DATA: %+v\n", payloadExData)
 		fmt.Printf("EXECUTION PAYLOAD: %+v\n", payloadExData.ExecutionPayload)
+		fmt.Printf("APP HASH PREPARE PROPOSAL: %+v\n", payloadExData.ExecutionPayload.StateRoot)
 		pb, err := payloadExData.ExecutionPayload.MarshalJSON()
 		if err != nil {
 			return nil, err
