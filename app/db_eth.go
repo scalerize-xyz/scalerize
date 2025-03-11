@@ -15,6 +15,8 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 	fmt.Println("STARTING HANDLING CONNECTION")
 
 	for {
+		app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
+
 		var (
 			response  []byte
 			tableCode uint8
@@ -591,7 +593,7 @@ func (app *ScalerizeApp) Write() {
 	// fmt.Println("AFTER WRITE", app.CommitMultiStore().WorkingHash())
 	// fmt.Println("LAST COMMIT APP HASH AFTER WRITE: ", app.CommitMultiStore().LastCommitID().Hash)
 
-	app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
+	// app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
 }
 
 // First: returns the first entry in the table and sets the cursor to that key

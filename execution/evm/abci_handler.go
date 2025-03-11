@@ -69,6 +69,8 @@ func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 
 		fmt.Printf("ForkchoiceUpdated response: %+v\n", fcres)
 
+		time.Sleep(10 * time.Millisecond)
+
 		payloadExData, err := c.GetPayload(*fcres.PayloadID)
 		if err != nil {
 			return nil, err
