@@ -51,3 +51,9 @@ func (app *ScalerizeApp) StartDBRouter(clientType string) {
 		go hConn(conn)
 	}
 }
+
+func (app *ScalerizeApp) writeToConn(conn net.Conn, response []byte) {
+	if _, err := conn.Write(response); err != nil {
+		app.Logger().Error(err.Error())
+	}
+}

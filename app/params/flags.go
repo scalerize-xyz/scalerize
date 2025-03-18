@@ -9,4 +9,5 @@ var (
 	FlagRPCCheckInterval             = "eth-rpc-check-interval"
 	FlagEthChainID                   = "eth-chain-id"
 	FlagSocketPath                   = "socket-path"
+	FlagCometBFTRPCAddress           = "cometbft-rpc-addr"
 )

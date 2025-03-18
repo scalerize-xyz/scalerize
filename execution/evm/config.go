@@ -14,6 +14,7 @@ const (
 	DefaultRPCCheckInterval      = 3 * time.Second
 	DefaultEthChainID            = "80087"
 	DefaultSocketPath            = "/tmp/ipc/scalerize.sock"
+	DefaultCometBFTRPCAddress    = "http://localhost:26657"
 )
 
 type EVMConfig struct {

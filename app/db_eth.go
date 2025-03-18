@@ -36,6 +36,30 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 			return
 		}
 
+		app.CommitMultiStore().GetKVStore(app.executionTablesInfo[0].StoreKey).Set([]byte{1}, []byte{1})
+
+		// rpcEndpoint := "http://localhost:26657" // Replace with your node's RPC endpoint
+		// cometBFTClient, err := CreateCometBFTClient(rpcEndpoint)
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
+		// defer cometBFTClient.Stop() // Remember to stop the client when you're done
+
+		// // The block height you're interested in
+		// cosmosClient, err := CreateCosmosClient(cometBFTClient)
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
+
+		// res, err := cosmosClient.Client.ABCIQueryWithOptions(context.Background(), "/store/hashed_storages/key", []byte{1}, client.ABCIQueryOptions{
+		// 	Prove: true,
+		// })
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
+
+		// fmt.Printf("PROOF: %+v\n", res)
+
 		if n == 0 {
 			continue
 		}
@@ -43,10 +67,10 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 		data := buffer[:n]
 
 		operation := data[0]
-		// fmt.Println("OPERATION: ", operation)
+		fmt.Println("OPERATION: ", operation)
 
 		tableCode = uint8(data[1])
-		// fmt.Println("TABLE CODE: ", tableCode)
+		fmt.Println("TABLE CODE: ", tableCode)
 
 		if _, err := app.getTable(tableCode); err != nil {
 			response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
@@ -489,8 +513,7 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 			}
 
 		default:
-			response = []byte{STATUS_ERROR}
-			response = append(response, []byte(ErrInvalidOperationCode.Error())...)
+			response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidOperationCode.Error())...)
 		}
 
 		app.writeToConn(conn, response)
@@ -1103,10 +1126,174 @@ func (app *ScalerizeApp) NextNoDup(tableCode uint8, cursorID [8]byte) ([]byte, e
 // 1. if subkey is greater than the greatest subkey for that key, then returns nil but sets the cursor to next entry in the table if exists
 // 2. if not, returns the next entry for the key/subkey lexicographically
 func (app *ScalerizeApp) SeekByKeySubkey(tableCode uint8, cursorID [8]byte, key []byte) ([]byte, error) {
-	app.rwMutex.RLock()
-	defer app.rwMutex.RUnlock()
+	// rpcEndpoint := "http://localhost:26657" // Replace with your node's RPC endpoint
+	// cometBFTClient, err := createCometBFTClient(rpcEndpoint)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// defer cometBFTClient.Stop() // Remember to stop the client when you're done
 
+	// Now you can use the client to interact with your CometBFT node
+	// For example, to get the latest block:
+	// block, err := cometBFTClient.Block(context.Background(), nil)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	// cometBFTClient.BlockByHash()
+
+	// fmt.Println("BLOCK CALL COMPLETED")
+
+	// if block.Block != nil && block.Block.Height > 2 {
+	// 	fmt.Printf("BLOCK: %+v\n", block)
+	// 	fmt.Printf("Latest block height: %d\n", block.Block.Height)
+	// 	k := []byte("hashed_storages")
+	// 	// height := int64(4) // The block height you're interested in
+
+	// 	cosmosClient, err := CreateCosmosClient(cometBFTClient)
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+
+	// 	// Get the proof
+	// 	res, err := cosmosClient.Client.ABCIQueryWithOptions(context.Background(), "/store/hashed_accounts/key", k, client.ABCIQueryOptions{
+	// 		Height: block.Block.Height,
+	// 		Prove:  true,
+	// 	})
+	// 	fmt.Println("proof call completed")
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+
+	// 	fmt.Printf("ABCI QUERY: %+v\n", res)
+	// }
+	// app.rwMutex.RLock()
+	// defer app.rwMutex.RUnlock()
+
+	// rpcEndpoint := "http://localhost:26657" // Replace with your node's RPC endpoint
+	// cometBFTClient, err := CreateCometBFTClient(rpcEndpoint)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// defer cometBFTClient.Stop() // Remember to stop the client when you're done
+
+	// // Now you can use the client to interact with your CometBFT node
+	// // For example, to get the latest block:
+	// block, err := cometBFTClient.Block(context.Background(), nil)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// fmt.Printf("BLOCK: %+v\n", block)
+	// // fmt.Printf("Latest block height: %d\n", block.Block.Height)
+
+	// if block.Block != nil && block.Block.Height > 2 {
+	// 	fmt.Println("HERE")
+	// 	// The block height you're interested in
+	// 	cosmosClient, err := app.CreateCosmosClient(cometBFTClient, block.Block.Height)
+	// 	if err != nil {
+	// 		fmt.Println("----------")
+	// 		return nil, err
+	// 	}
+	// 	// context, err := app.CreateQueryContext(block.Block.Height, true)
+	// 	// if err != nil {
+	// 	// 	return nil, err
+	// 	// }
+
+	// 	// fmt.Println("?????????????")
+	// 	block, err := cosmosClient.Client.Block(context.Background(), nil)
+	// 	fmt.Println("______________")
+	// 	if err != nil {
+	// 		fmt.Println("eeeeeeeeee")
+	// 		return nil, err
+	// 	}
+
+	// 	fmt.Println("ffffffffffff")
+	// 	fmt.Printf("HERE BLOCK: %+v\n", block)
+
+	// 	fmt.Println("@@@@@@@@@@@@@@")
+
+	// res, err := cosmosClient.Client.ABCIQueryWithOptions(context.Background(), "/store/hashed_storages/key", []byte{1}, client.ABCIQueryOptions{
+	// 	Prove: true,
+	// })
+	// abciReq := abci.RequestQuery{
+	// 	Path:   "/store/hashed_stoages/key",
+	// 	Height: 0,
+	// 	Data:   []byte{1},
+	// 	Prove:  true,
+	// }
+	// res, err := cosmosClient.QueryABCI(abciReq)
+	// fmt.Println("2222222222")
+	// if err != nil {
+	// 	fmt.Println("///////////")
+	// 	return nil, err
+	// }
+
+	// 	value, proof, err := GetProof(cosmosClient, "hashed_storages", []byte{1})
+	// 	if err != nil {
+	// 		fmt.Println("ERROR: ", err)
+	// 		fmt.Println("(((((((())))))))")
+	// 		return nil, err
+	// 	}
+
+	// 	fmt.Printf("PROOF: %+v: %+v\n", value, proof)
+	// }
 	// fmt.Println("ITERATOR POSITION BEFORE SEEK BY KEY SUBKEY: ", ethIteratorsCurrentKey[cursorID])
+
+	// rpcEndpoint := "http://localhost:26657" // Replace with your node's RPC endpoint
+	// cometBFTClient, err := CreateCometBFTClient(rpcEndpoint)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// defer cometBFTClient.Stop() // Remember to stop the client when you're done
+
+	// // Now you can use the client to interact with your CometBFT node
+	// // For example, to get the latest block:
+	// block, err := cometBFTClient.Block(context.Background(), nil)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// fmt.Printf("BLOCK: %+v\n", block)
+	// // fmt.Printf("Latest block height: %d\n", block.Block.Height)
+
+	// if block.Block != nil && block.Block.Height > 2 {
+
+	// 	// key := []byte("hashed_storages")
+	// 	// height := int64(4) // The block height you're interested in
+
+	// 	cosmosClient, err := app.CreateCosmosClient(cometBFTClient)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+
+	// 	// value, proof, err := GetProof(cosmosClient, "hashed_storages", []byte{1})
+	// 	// if err != nil {
+	// 	// 	return nil, err
+	// 	// }
+
+	// 	// Get the proof
+	// 	// res, err := cosmosClient.Client.ABCIQueryWithOptions(context.Background(), "/store/hashed_storages/key", key, client.ABCIQueryOptions{
+	// 	// 	Height: block.Block.Height,
+	// 	// 	Prove:  true,
+	// 	// })
+	// 	// if err != nil {
+	// 	// 	log.Fatal(err)
+	// 	// }
+
+	// 	fmt.Println("EEEEEEE")
+	// 	res, err := cosmosClient.Client.ABCIQueryWithOptions(context.Background(), "/store/hashed_a/key", key, client.ABCIQueryOptions{
+	// 		Height: block.Block.Height,
+	// 		Prove:  true,
+	// 	})
+	// 	fmt.Println("RRRRRRR")
+	// 	if err != nil {
+
+	// 		log.Fatal(err)
+	// 	}
+
+	// 	fmt.Printf("ABCI QUERY: %+v\n", res)
+
+	// 	// fmt.Printf("ABCI QUERY: %+v : : %+v\n", value, proof)
+	// }
 
 	table, err := app.getTable(tableCode)
 	if err != nil {
@@ -1247,10 +1434,4 @@ func (app *ScalerizeApp) AppendDup(tableCode uint8, cursorID [8]byte, k, value [
 	// fmt.Println("ITERATOR POSITION AFTER APPEND DUP: ", ethIteratorsCurrentKey[cursorID])
 
 	return nil
-}
-
-func (app *ScalerizeApp) writeToConn(conn net.Conn, response []byte) {
-	if _, err := conn.Write(response); err != nil {
-		app.Logger().Error(err.Error())
-	}
 }
