@@ -24,7 +24,3 @@ func NewScalerizeABCIHandler(h ABCIHandler) *ScalerizeABCIHandler {
 		// ABCIHandler: h,
 	}
 }
-
-// func (h *ScalerizeABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
-
-// }

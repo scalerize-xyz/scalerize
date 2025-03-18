@@ -1,3 +1,4 @@
+#!/bin/sh
 ETH_DATA_DIR=.scalerized/eth
 JWT_PATH=testing/files/jwt.hex
 ETH_GENESIS_PATH=testing/files/eth-genesis.json

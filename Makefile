@@ -1,6 +1,6 @@
 STARTING-IP-ADDR := 172.20.0.2
 NODES := 4
-SCALERIZED_CONTAINER_DIR := /go/src/github.com/aerius-labs/scalerize/build/scalerized
+SCALERIZED_BINARY_PATH := /go/src/github.com/aerius-labs/scalerize/build/scalerized
 BUILDDIR ?= $(CURDIR)/build
 
 include scripts/execution-client.mk
@@ -56,4 +56,4 @@ init:
 	./scripts/init.sh
 
 localtestnet-example-config: 
-	$(SCALERIZED_CONTAINER_DIR) testnet init-files --output-dir example-testnet --v $(NODES) --starting-ip-address $(STARTING-IP-ADDR) --keyring-backend test
+	$(SCALERIZED_BINARY_PATH) testnet init-files --output-dir example-testnet --v $(NODES) --starting-ip-address $(STARTING-IP-ADDR) --keyring-backend test
