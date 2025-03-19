@@ -7,23 +7,17 @@ import (
 	"io"
 	"sync"
 
-	abci "github.com/cometbft/cometbft/abci/types"
-	crypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
-	"github.com/cometbft/cometbft/rpc/client/http"
 	dbm "github.com/cosmos/cosmos-db"
 
 	"cosmossdk.io/core/appconfig"
 	"cosmossdk.io/depinject"
 	"cosmossdk.io/log"
-	"cosmossdk.io/store"
-	"cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
 
 	clienthelpers "cosmossdk.io/client/v2/helpers"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/codec/types"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
 	"github.com/cosmos/cosmos-sdk/server"
@@ -59,9 +53,11 @@ var DefaultNodeHome string
 var AppConfigYAML []byte
 
 var (
-	_          runtime.AppI            = (*ScalerizeApp)(nil)
-	_          servertypes.Application = (*ScalerizeApp)(nil)
-	socketPath string
+	_                  runtime.AppI            = (*ScalerizeApp)(nil)
+	_                  servertypes.Application = (*ScalerizeApp)(nil)
+	dbSocketPath       string
+	stateSocketPath    string
+	cometBFTRPCAddress string
 )
 
 // ScalerizeApp extends an ABCI application, but with most of its parameters exported.
@@ -150,7 +146,9 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
-	socketPath = appOpts.Get(params.FlagSocketPath).(string)
+	dbSocketPath = appOpts.Get(params.FlagDBSocketPath).(string)
+	stateSocketPath = appOpts.Get(params.FlagStateSocketPath).(string)
+	cometBFTRPCAddress = appOpts.Get(params.FlagCometBFTRPCAddress).(string)
 
 	executionClient, err := app.NewClient(ctx, appOpts, logger)
 	if err != nil {
@@ -186,6 +184,7 @@ func NewScalerizeApp(
 
 	/****  Module Options ****/
 
+	fmt.Println("CHAIN ID: ", app.ChainID())
 	// create the simulation manager and define the order of the modules for deterministic simulations
 	// NOTE: this is not required apps that don't use the simulator for fuzz testing transactions
 	app.sm = module.NewSimulationManagerFromAppModules(app.ModuleManager.Modules, make(map[string]module.AppModuleSimulation, 0))
@@ -195,9 +194,17 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
-	go app.StartDBRouter(appOpts.Get(params.FlagExecutionClientType).(string))
+	clientType := appOpts.Get(params.FlagExecutionClientType).(string)
+
+	go app.StartDBRouter(clientType)
+	go app.StartStateRouter(clientType)
 
 	<-ensureClientCreatedCh
+
+	for _, storekey := range app.GetStoreKeys() {
+		fmt.Printf("STORE KEY: %+v\n", storekey)
+	}
+
 	return app, nil
 }
 
@@ -242,75 +249,48 @@ func (app *ScalerizeApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.
 	}
 }
 
-func CreateCometBFTClient(rpcEndpoint string) (*http.HTTP, error) {
-	client, err := http.New(rpcEndpoint, "/websocket")
-	if err != nil {
-		return nil, err
-	}
+// func GetProof(clientCtx client.Context, storeKey string, key []byte) ([]byte, *crypto.ProofOps, error) {
+// 	height := clientCtx.Height
+// 	fmt.Println("HEIGHT: ", height)
+// 	// ABCI queries at height less than or equal to 2 are not supported.
+// 	// Base app does not support queries for height less than or equal to 1.
+// 	// Therefore, a query at height 2 would be equivalent to a query at height 3
+// 	if height <= 2 {
+// 		return nil, nil, fmt.Errorf("proof queries at height <= 2 are not supported")
+// 	}
 
-	// Optionally, you can start the client
-	err = client.Start()
-	if err != nil {
-		return nil, err
-	}
+// 	abciReq := abci.RequestQuery{
+// 		Path:   fmt.Sprintf("store/%s/key", storeKey),
+// 		Data:   key,
+// 		Height: height,
+// 		Prove:  true,
+// 	}
 
-	return client, nil
-}
+// 	abciRes, err := clientCtx.QueryABCI(abciReq)
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
 
-func CreateCosmosClient(cometBFTClient *http.HTTP) (client.Context, error) {
-	interfaceRegistry := types.NewInterfaceRegistry()
-	marshaler := codec.NewProtoCodec(interfaceRegistry)
+// 	return abciRes.Value, abciRes.ProofOps, nil
+// }
 
-	// Create the client context
-	clientCtx := client.Context{}.
-		WithClient(cometBFTClient).
-		WithCodec(marshaler).
-		WithInterfaceRegistry(interfaceRegistry)
+// func (app *ScalerizeApp) InitializeCommitMultiStore(db dbm.DB, logger log.Logger, metricGatherer metrics.StoreMetrics) error {
+// 	// Initialize the CommitMultiStore
+// 	cms := store.NewCommitMultiStore(db, logger, metricGatherer)
 
-	return clientCtx, nil
-}
+// 	// Mount necessary stores
+// 	for _, table := range app.executionTablesInfo {
+// 		cms.MountStoreWithDB(table.StoreKey, storetypes.StoreTypeIAVL, db)
+// 	}
 
-func GetProof(clientCtx client.Context, storeKey string, key []byte) ([]byte, *crypto.ProofOps, error) {
-	height := clientCtx.Height
-	// ABCI queries at height less than or equal to 2 are not supported.
-	// Base app does not support queries for height less than or equal to 1.
-	// Therefore, a query at height 2 would be equivalent to a query at height 3
-	if height <= 2 {
-		return nil, nil, fmt.Errorf("proof queries at height <= 2 are not supported")
-	}
+// 	// Load the latest version
+// 	err := cms.LoadLatestVersion()
+// 	if err != nil {
+// 		return err
+// 	}
 
-	abciReq := abci.RequestQuery{
-		Path:   fmt.Sprintf("store/%s/key", storeKey),
-		Data:   key,
-		Height: height,
-		Prove:  true,
-	}
+// 	// Set the CommitMultiStore
+// 	app.SetCMS(cms)
 
-	abciRes, err := clientCtx.QueryABCI(abciReq)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return abciRes.Value, abciRes.ProofOps, nil
-}
-
-func (app *ScalerizeApp) InitializeCommitMultiStore(db dbm.DB, logger log.Logger, metricGatherer metrics.StoreMetrics) error {
-	// Initialize the CommitMultiStore
-	cms := store.NewCommitMultiStore(db, logger, metricGatherer)
-
-	// Mount necessary stores
-	for _, table := range app.executionTablesInfo {
-		cms.MountStoreWithDB(table.StoreKey, storetypes.StoreTypeIAVL, db)
-	}
-
-	// Load the latest version
-	err := cms.LoadLatestVersion()
-	if err != nil {
-		return err
-	}
-
-	// Set the CommitMultiStore
-	app.SetCMS(cms)
-
-	return nil
-}
+// 	return nil
+// }

@@ -42,6 +42,12 @@ const (
 	OP_DROP_CURSOR byte = 16
 )
 
+// STATE OPERATIONS
+const (
+	OP_STATE_ROOT  byte = 1
+	OP_STATE_PROOF byte = 2
+)
+
 const (
 	HashedAccountsStoreName = "hashed_accounts"
 	HashedStoragesStoreName = "hashed_storages"
@@ -52,6 +58,10 @@ const (
 	SerializedHashedAccountsKeyBytes    = 40
 	SerializedHashedStoragesKeyBytes    = 40
 	SerializedHashedStoragesSubKeyBytes = 40
+
+	EthAccountAddressBytes = 20
+	EthBlockNumberBytes    = 8
+	EthBlockHashBytes      = 32
 
 	CursorIDBytes = 8
 )

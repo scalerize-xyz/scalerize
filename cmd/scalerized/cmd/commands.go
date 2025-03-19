@@ -51,7 +51,9 @@ func initRootCmd(rootCmd *cobra.Command, txConfig client.TxConfig, basicManager 
 		startCmd.PersistentFlags().String(params.FlagRPCCheckInterval, evm.DefaultRPCCheckInterval.String(), "Ethereum RPC server startup check interval")
 		startCmd.PersistentFlags().String(params.FlagRPCJWTRefreshInterval, evm.DefaultRPCJWTRefreshInterval.String(), "Ethereum execution engine API jwt refresh interval")
 		startCmd.PersistentFlags().String(params.FlagEthChainID, evm.DefaultEthChainID, "Ethereum execution client chain id")
-		startCmd.PersistentFlags().String(params.FlagSocketPath, evm.DefaultSocketPath, "Unix socket path used for IPC between Scalerize and the execution client")
+		startCmd.PersistentFlags().String(params.FlagDBSocketPath, evm.DefaultDBSocketPath, "Unix socket path used for IPC between Scalerize and the execution client for DB operations")
+		startCmd.PersistentFlags().String(params.FlagStateSocketPath, evm.DefaultStateSocketPath, "Unix socket path used for IPC between Scalerize and the execution client for state queries")
+		startCmd.PersistentFlags().String(params.FlagCometBFTRPCAddress, evm.DefaultCometBFTRPCAddress, "RPC address specified in config.toml")
 	})
 
 	// add keybase, auxiliary RPC, query, genesis, and tx child commands
