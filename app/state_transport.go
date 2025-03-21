@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 
 	evmexec "github.com/aerius-labs/scalerize/execution/evm"
 )
@@ -20,6 +21,10 @@ func (app *ScalerizeApp) StartStateRouter(clientType string) {
 		hConn = app.ethHandleStateConnection
 	default:
 		panic(ErrInvalidExecutionClient)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(stateSocketPath), 0755); err != nil {
+		panic(fmt.Errorf("failed to create socket directory: %w", err))
 	}
 
 	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: stateSocketPath, Net: "unix"})

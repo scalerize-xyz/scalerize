@@ -146,6 +146,7 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
+	// iavl.AsyncPruningOption()
 	dbSocketPath = appOpts.Get(params.FlagDBSocketPath).(string)
 	stateSocketPath = appOpts.Get(params.FlagStateSocketPath).(string)
 	cometBFTRPCAddress = appOpts.Get(params.FlagCometBFTRPCAddress).(string)
@@ -196,8 +197,37 @@ func NewScalerizeApp(
 
 	clientType := appOpts.Get(params.FlagExecutionClientType).(string)
 
+	executionClient.SetApp(app.BaseApp)
+
 	go app.StartDBRouter(clientType)
 	go app.StartStateRouter(clientType)
+	// go func() {
+	// 	time.Sleep(20 * time.Second)
+	// 	c := app.CommitMultiStore().CacheMultiStore()
+	// 	c.GetKVStore(app.executionTablesInfo[0].StoreKey).Set([]byte{3}, []byte{3})
+	// 	fmt.Println("GET 2 from cachemultistore", c.GetKVStore(app.executionTablesInfo[0].StoreKey).Get([]byte{3}))
+	// 	c.Write()
+	// 	fmt.Println("GET 2 from commitmultistore", app.CommitMultiStore().CacheMultiStore().GetKVStore(app.executionTablesInfo[0].StoreKey).Get([]byte{3}))
+	// 	// fmt.Println("----------------------------", app.CommitMultiStore().GetKVStore(app.executionTablesInfo[0].StoreKey).Get([]byte{
+	// 	// 	32, 0, 0, 0, 0, 0, 0, 0, 254, 212, 140, 188, 17, 169, 63, 100,
+	// 	// 	69, 192, 211, 41, 51, 101, 89, 199, 60, 113, 120, 2, 184, 8, 7, 223,
+	// 	// 	184, 19, 202, 193, 34, 143, 25, 137,
+	// 	// }))
+
+	// 	// store := app.CommitMultiStore().GetKVStore(app.executionTablesInfo[0].StoreKey)
+	// 	// iterator := store.Iterator(nil, nil) // This will iterate over all keys
+	// 	// defer iterator.Close()
+
+	// 	// fmt.Println("All data in store:", app.executionTablesInfo[0].StoreKey.Name())
+	// 	// for ; iterator.Valid(); iterator.Next() {
+	// 	// 	key := iterator.Key()
+	// 	// 	value := iterator.Value()
+	// 	// 	fmt.Printf("Key: %x, Value: %x\n", key, value)
+	// 	// 	// For more readable output if your data is UTF-8 strings:
+	// 	// 	// fmt.Printf("Key: %s, Value: %s\n", string(key), string(value))
+	// 	// }
+
+	// }()
 
 	<-ensureClientCreatedCh
 

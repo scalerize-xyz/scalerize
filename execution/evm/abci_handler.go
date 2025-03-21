@@ -14,6 +14,28 @@ import (
 
 func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
+		// store := c.app.CommitMultiStore().GetKVStore(storetypes.NewKVStoreKey("hashed_accounts"))
+		// iterator := store.Iterator(nil, nil) // This will iterate over all keys
+		// defer iterator.Close()
+
+		// fmt.Println("All data in store: hashed_accounts")
+		// for ; iterator.Valid(); iterator.Next() {
+		// 	key := iterator.Key()
+		// 	value := iterator.Value()
+		// 	fmt.Printf("Key: %x, Value: %x\n", key, value)
+		// }
+
+		// store = c.app.CommitMultiStore().GetKVStore(storetypes.NewKVStoreKey("hashed_storages"))
+		// iterator = store.Iterator(nil, nil) // This will iterate over all keys
+		// defer iterator.Close()
+
+		// fmt.Println("All data in store: hashed_storages")
+		// for ; iterator.Valid(); iterator.Next() {
+		// 	key := iterator.Key()
+		// 	value := iterator.Value()
+		// 	fmt.Printf("Key: %x, Value: %x\n", key, value)
+		// }
+
 		// todo: put retries for rpc and engine api calls
 
 		// the store reflects the changes made through the web server created for crud operations in multistore
@@ -28,15 +50,15 @@ func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 			return nil, err
 		}
 
-		fmt.Printf("LATEST BLOCK NUMBER: %v\n", lbn.Int64())
+		// fmt.Printf("LATEST BLOCK NUMBER: %v\n", lbn.Int64())
 
 		bh, err := c.GetBlockByNumber(lbn, false)
 		if err != nil {
 			return nil, err
 		}
 
-		fmt.Printf("LATEST BLOCK HEADER: %+v\n", bh)
-		fmt.Println("LATEST BLOCK HASH: ", bh.Hash())
+		// fmt.Printf("LATEST BLOCK HEADER: %+v\n", bh)
+		// fmt.Println("LATEST BLOCK HASH: ", bh.Hash())
 
 		state := &ForkchoiceState{
 			HeadBlockHash:      bh.Hash(),
@@ -67,7 +89,7 @@ func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 			return nil, err
 		}
 
-		fmt.Printf("ForkchoiceUpdated response: %+v\n", fcres)
+		// fmt.Printf("ForkchoiceUpdated response: %+v\n", fcres)
 
 		time.Sleep(10 * time.Millisecond)
 
@@ -76,8 +98,8 @@ func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 			return nil, err
 		}
 
-		fmt.Printf("PAYLOAD EXECUTABLE DATA: %+v\n", payloadExData)
-		fmt.Printf("EXECUTION PAYLOAD: %+v\n", payloadExData.ExecutionPayload)
+		// fmt.Printf("PAYLOAD EXECUTABLE DATA: %+v\n", payloadExData)
+		// fmt.Printf("EXECUTION PAYLOAD: %+v\n", payloadExData.ExecutionPayload)
 		fmt.Printf("APP HASH PREPARE PROPOSAL: %+v\n", payloadExData.ExecutionPayload.StateRoot)
 		pb, err := payloadExData.ExecutionPayload.MarshalJSON()
 		if err != nil {
@@ -111,15 +133,15 @@ func (c *EVMClient) ProcessProposal() sdk.ProcessProposalHandler {
 			return nil, err
 		}
 
-		fmt.Printf("RECIEVED EXECUTION PAYLOAD: %+v\n", executableData)
-		fmt.Printf("RECIEVED PAYLOAD ATTRIBUTES: %+v\n", attributes)
+		// fmt.Printf("RECIEVED EXECUTION PAYLOAD: %+v\n", executableData)
+		// fmt.Printf("RECIEVED PAYLOAD ATTRIBUTES: %+v\n", attributes)
 
-		res, err := c.NewPayload(*executableData, []common.Hash{}, (common.Hash)(attributes.ParentBeaconBlockRoot))
+		_, err := c.NewPayload(*executableData, []common.Hash{}, (common.Hash)(attributes.ParentBeaconBlockRoot))
 		if err != nil {
 			return nil, err
 		}
 
-		fmt.Printf("NEW PAYLOAD RESULT: %+v\n", res)
+		// fmt.Printf("NEW PAYLOAD RESULT: %+v\n", res)
 
 		return &abci.ResponseProcessProposal{
 			Status: abci.ResponseProcessProposal_ACCEPT,
@@ -140,12 +162,12 @@ func (c *EVMClient) PreBlock() sdk.PreBlocker {
 			FinalizedBlockHash: executableData.ParentHash,
 		}
 
-		fcres, err := c.ForkchoiceUpdated(state, nil)
+		_, err := c.ForkchoiceUpdated(state, nil)
 		if err != nil {
 			return nil, err
 		}
 
-		fmt.Printf("PRE BLOCK ForkchoiceUpdated response: %+v\n", fcres)
+		// fmt.Printf("PRE BLOCK ForkchoiceUpdated response: %+v\n", fcres)
 
 		return &sdk.ResponsePreBlock{
 			ConsensusParamsChanged: false,

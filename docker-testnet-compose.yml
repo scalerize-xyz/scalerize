@@ -87,7 +87,7 @@ services:
 
   reth-bootnode:
     container_name: reth-bootnode
-    image: "bornpsych/reth"  
+    image: "nikhilsharmawe/reth"  
     ports:
       - "8551:8551"
       - "8545:8545"
@@ -102,7 +102,7 @@ services:
 
   rethnode0:
     container_name: rethnode0
-    image: "bornpsych/reth"
+    image: "nikhilsharmawe/reth"
     environment:
       - BOOTNODE_IP=172.20.0.6
       - BOOTNODE_RPC_PORT=8545
@@ -121,7 +121,7 @@ services:
 
   rethnode1:
     container_name: rethnode1
-    image: "bornpsych/reth"
+    image: "nikhilsharmawe/reth"
     environment:
       - BOOTNODE_IP=172.20.0.6
       - BOOTNODE_RPC_PORT=8545
@@ -139,7 +139,7 @@ services:
 
   rethnode2:
     container_name: rethnode2
-    image: "bornpsych/reth"
+    image: "nikhilsharmawe/reth"
     environment:
       - BOOTNODE_IP=172.20.0.6
       - BOOTNODE_RPC_PORT=8545

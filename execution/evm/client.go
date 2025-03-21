@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -20,6 +21,7 @@ const (
 
 type EVMClient struct {
 	ctx          context.Context
+	app          *baseapp.BaseApp
 	config       *EVMConfig
 	engineClient *ethclient.Client
 	rpcClient    *ethclient.Client
@@ -36,6 +38,10 @@ func NewEVMClient(ctx context.Context, cfg *EVMConfig, logger log.Logger) (*EVMC
 
 func (client *EVMClient) Name() string {
 	return EVM
+}
+
+func (client *EVMClient) SetApp(app *baseapp.BaseApp) {
+	client.app = app
 }
 
 func (c *EVMClient) Start(ctx context.Context, ensureClientCreatedCh chan bool) error {

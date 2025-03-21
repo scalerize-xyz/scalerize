@@ -42,7 +42,7 @@ func (app *ScalerizeApp) ethHandleStateConnection(conn net.Conn) {
 		data := buffer[:n]
 
 		operation := data[0]
-		fmt.Println("OPERATION: ", operation)
+		fmt.Println("OPERATION STATE: ", operation)
 
 		// height := data[1:9]
 		// fmt.Println("HEIGHT: ", height)
@@ -73,12 +73,18 @@ func (app *ScalerizeApp) ethHandleStateConnection(conn net.Conn) {
 				blockSpecBytes int
 			)
 
+			fmt.Println("DATA: ", data)
 			if data[1] == 0 {
 				bn := data[2 : 2+EthBlockNumberBytes]
 				bnInt := int64(binary.BigEndian.Uint64(bn))
 				blockNumOrHash.BlockNumber = &bnInt
 				blockSpecBytes = EthBlockNumberBytes
 			} else if data[1] == 1 {
+				bn := -1
+				bnInt := int64(bn)
+				blockNumOrHash.BlockNumber = &bnInt
+				blockSpecBytes = 0
+			} else if data[1] == 2 {
 				bh := data[2 : 2+EthBlockHashBytes]
 				blockNumOrHash.BlockHash = &common.Hash{}
 				copy(blockNumOrHash.BlockHash[:], bh)
@@ -90,6 +96,8 @@ func (app *ScalerizeApp) ethHandleStateConnection(conn net.Conn) {
 
 			addressStart := 2 + blockSpecBytes
 			addressEnd := addressStart + SerializedHashedAccountsKeyBytes
+			fmt.Println("ADDRESS START: ", addressStart)
+			fmt.Println("ADDRESS END: ", addressEnd)
 			if len(data) < addressEnd {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
@@ -100,9 +108,13 @@ func (app *ScalerizeApp) ethHandleStateConnection(conn net.Conn) {
 				storageKeys = [][]byte{}
 			} else {
 				// storageKeysBytes := len(data) - 1 + EthBlockNumberBytes + EthAccountAddressBytes
-				combinedKeySize := SerializedHashedStoragesKeyBytes + SerializedHashedStoragesSubKeyBytes
+				combinedKeySize := SerializedHashedStoragesSubKeyBytes
 				totalStorageBytes := len(data) - addressEnd
+				fmt.Println("COMBINED KEY SIZE: ", combinedKeySize)
+				fmt.Println("TotalStorageBytes ", totalStorageBytes)
+
 				if totalStorageBytes%combinedKeySize != 0 {
+					fmt.Println("ERROR1")
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
 				}
@@ -118,6 +130,7 @@ func (app *ScalerizeApp) ethHandleStateConnection(conn net.Conn) {
 
 			resp, err := app.StateProof(&blockNumOrHash, address, storageKeys)
 			if err != nil {
+				fmt.Println("ERROR2")
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 			} else {
 				response = append([]byte{STATUS_SUCCESS}, resp...)
@@ -126,6 +139,7 @@ func (app *ScalerizeApp) ethHandleStateConnection(conn net.Conn) {
 			response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidOperationCode.Error())...)
 		}
 
+		fmt.Println("RESPONSE STATE: ", response)
 		app.writeToConn(conn, response)
 	}
 }
@@ -166,6 +180,8 @@ func (app *ScalerizeApp) StateProof(blockNumOrHash *BlockNumberOrHash, serialize
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Printf("ACCOUNT RESULT: %+v\n", accountResult)
 
 	return json.Marshal(accountResult)
 }
