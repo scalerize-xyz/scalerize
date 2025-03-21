@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 
@@ -67,9 +68,9 @@ func createCosmosClient(cometBFTClient *http.HTTP) (cosmossdkclient.Context, err
 // in our case we will get the storage slot directly and
 // will populate key in StorageResult, balance, codeHash and none in AccountResult on reth side
 // need to send the bincode serialized hashed address and hashed storageKeys
-func getProof(cometBFTClient *http.HTTP, serializedHashedAccountAddress []byte, serializedHashedStorageKeys [][]byte, blockNumOrHash *BlockNumberOrHash) (*AccountResult, error) {
+func getProof(cometBFTClient *http.HTTP, serializedHashedAccountAddress []byte, serializedStorageKeys [][]byte, blockNumOrHash *BlockNumberOrHash) (*AccountResult, error) {
 	fmt.Println("serializedHashedAccountAddress: ", serializedHashedAccountAddress)
-	fmt.Println("serializedHashedStorageKeys: ", serializedHashedStorageKeys)
+	fmt.Println("serializedHashedStorageKeys: ", serializedStorageKeys)
 	fmt.Printf("blockNumOrHash: %+v\n", blockNumOrHash)
 
 	blockNumber, err := blockNumberFromTendermint(cometBFTClient, *blockNumOrHash)
@@ -80,7 +81,7 @@ func getProof(cometBFTClient *http.HTTP, serializedHashedAccountAddress []byte, 
 	fmt.Println("PROOF BLOCK NUMBER: ", blockNumber)
 
 	// query storage proofs
-	storageProofs := make([]StorageResult, len(serializedHashedStorageKeys))
+	storageProofs := make([]StorageResult, len(serializedStorageKeys))
 
 	cosmosClient, err := createCosmosClient(cometBFTClient)
 	if err != nil {
@@ -89,7 +90,7 @@ func getProof(cometBFTClient *http.HTTP, serializedHashedAccountAddress []byte, 
 
 	cosmosClient = cosmosClient.WithHeight(blockNumber)
 
-	for i, key := range serializedHashedStorageKeys {
+	for i, key := range serializedStorageKeys {
 		// hexKey := common.HexToHash(key)
 		valueBz, proof, err := getProofForKey(cosmosClient, HashedStoragesStoreName, append(serializedHashedAccountAddress, key...))
 		if err != nil {
@@ -98,7 +99,9 @@ func getProof(cometBFTClient *http.HTTP, serializedHashedAccountAddress []byte, 
 
 		fmt.Println("STORAGE PROOF VAL BYTES: ", valueBz)
 
+		fmt.Println("HEX STRING", hex.EncodeToString(key))
 		storageProofs[i] = StorageResult{
+			Key:   hex.EncodeToString(key[8:]),
 			Value: (*hexutil.Big)(new(big.Int).SetBytes(valueBz)),
 			Proof: getHexProofs(proof),
 		}
@@ -114,7 +117,10 @@ func getProof(cometBFTClient *http.HTTP, serializedHashedAccountAddress []byte, 
 	fmt.Println("ACCOUNT PROOF VAL BYTES: ", accountVal)
 
 	return &AccountResult{
+		Address:      common.Address{},
 		AccountProof: getHexProofs(proof),
+		Balance:      (new(big.Int).SetBytes(make([]byte, 32))),
+		Nonce:        0,
 		StorageHash:  common.Hash{},
 		StorageProof: storageProofs,
 	}, nil
