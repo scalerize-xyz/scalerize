@@ -14,6 +14,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/holiman/uint256"
 )
 
 // AccountResult is the result of a GetProof operation.
@@ -30,7 +31,7 @@ type AccountResult struct {
 // StorageResult provides a proof for a key-value pair.
 type StorageResult struct {
 	Key   string       `json:"key"`
-	Value *hexutil.Big `json:"value"`
+	Value *uint256.Int `json:"value"`
 	Proof []string     `json:"proof"`
 }
 
@@ -102,7 +103,7 @@ func getProof(cometBFTClient *http.HTTP, serializedHashedAccountAddress []byte, 
 		fmt.Println("HEX STRING", hex.EncodeToString(key))
 		storageProofs[i] = StorageResult{
 			Key:   hex.EncodeToString(key[8:]),
-			Value: (*hexutil.Big)(new(big.Int).SetBytes(valueBz)),
+			Value: uint256.NewInt(0).SetBytes(valueBz),
 			Proof: getHexProofs(proof),
 		}
 	}
