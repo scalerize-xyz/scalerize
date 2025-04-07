@@ -22,7 +22,6 @@ func (app *ScalerizeApp) ethHandleStateConnection(conn net.Conn) {
 		)
 
 		// 1st byte contains the operation
-		// next 8 bytes contains block number
 		buffer := make([]byte, 4096)
 
 		n, err := conn.Read(buffer)
@@ -128,6 +127,11 @@ func (app *ScalerizeApp) ethHandleStateConnection(conn net.Conn) {
 				}
 			}
 
+			fmt.Printf("ACCOUNT: %+v\n", address)
+			for v := range storageKeys {
+				fmt.Printf("STORAGE KEY: %+v\n", v)
+			}
+
 			resp, err := app.StateProof(&blockNumOrHash, address, storageKeys)
 			if err != nil {
 				fmt.Println("ERROR2")
@@ -145,11 +149,13 @@ func (app *ScalerizeApp) ethHandleStateConnection(conn net.Conn) {
 }
 
 func (app *ScalerizeApp) StateRoot(height int64) ([]byte, error) {
+	fmt.Println("HEIGHT INT: ", height)
 	if height < -1 {
 		return nil, ErrInvalidRequestData
 	}
 
 	if height == -1 {
+		fmt.Println("RETURNING WORKING HASH: ", app.CommitMultiStore().WorkingHash())
 		return app.CommitMultiStore().WorkingHash(), nil
 	}
 
@@ -165,6 +171,7 @@ func (app *ScalerizeApp) StateRoot(height int64) ([]byte, error) {
 		return nil, err
 	}
 
+	fmt.Println("RETURNING HISTORICAL HASH: ", block.Block.AppHash)
 	return block.Block.AppHash, nil
 }
 

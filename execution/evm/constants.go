@@ -1,5 +1,12 @@
 package evm
 
+import "sync"
+
+var (
+	EthIteratorsCurrentKey     = make(map[[CursorIDBytes]byte][]byte)
+	EthIteratorsCurrentKeyLock sync.RWMutex
+)
+
 const (
 	// NewPayloadMethodV3 for creating a new payload in Deneb.
 	NewPayloadMethodV3 = "engine_newPayloadV3"
@@ -17,6 +24,8 @@ const (
 	ExchangeCapabilities = "engine_exchangeCapabilities"
 	// GetClientVersionV1 for retrieving the capabilities of the peer.
 	GetClientVersionV1 = "engine_getClientVersionV1"
+
+	CursorIDBytes = 8
 )
 
 func ScalerizeSupportedCapabilities() []string {

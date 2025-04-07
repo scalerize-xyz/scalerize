@@ -91,16 +91,16 @@ func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 
 		// fmt.Printf("ForkchoiceUpdated response: %+v\n", fcres)
 
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 
 		payloadExData, err := c.GetPayload(*fcres.PayloadID)
 		if err != nil {
 			return nil, err
 		}
 
-		// fmt.Printf("PAYLOAD EXECUTABLE DATA: %+v\n", payloadExData)
-		// fmt.Printf("EXECUTION PAYLOAD: %+v\n", payloadExData.ExecutionPayload)
-		fmt.Printf("APP HASH PREPARE PROPOSAL: %+v\n", payloadExData.ExecutionPayload.StateRoot)
+		fmt.Printf("PAYLOAD EXECUTABLE DATA: %+v\n", payloadExData)
+		fmt.Printf("EXECUTION PAYLOAD: %+v\n", payloadExData.ExecutionPayload)
+		// fmt.Printf("APP HASH PREPARE PROPOSAL: %+v\n", payloadExData.ExecutionPayload.StateRoot)
 		pb, err := payloadExData.ExecutionPayload.MarshalJSON()
 		if err != nil {
 			return nil, err
@@ -162,12 +162,16 @@ func (c *EVMClient) PreBlock() sdk.PreBlocker {
 			FinalizedBlockHash: executableData.ParentHash,
 		}
 
-		_, err := c.ForkchoiceUpdated(state, nil)
+		fcres, err := c.ForkchoiceUpdated(state, nil)
 		if err != nil {
 			return nil, err
 		}
 
-		// fmt.Printf("PRE BLOCK ForkchoiceUpdated response: %+v\n", fcres)
+		fmt.Printf("PRE BLOCK ForkchoiceUpdated response: %+v\n", fcres)
+
+		EthIteratorsCurrentKeyLock.Lock()
+		defer EthIteratorsCurrentKeyLock.Unlock()
+		EthIteratorsCurrentKey = map[[8]byte][]byte{}
 
 		return &sdk.ResponsePreBlock{
 			ConsensusParamsChanged: false,

@@ -7,6 +7,7 @@ import (
 	"net"
 
 	storetypes "cosmossdk.io/store/types"
+	"github.com/aerius-labs/scalerize/execution/evm"
 )
 
 func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
@@ -69,13 +70,18 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 		operation := data[0]
 		// fmt.Println("OPERATION: ", operation)
 
-		tableCode = uint8(data[1])
-		// fmt.Println("TABLE CODE: ", tableCode)
+		if operation != OP_WRITE {
+			tableCode = uint8(data[1])
+			// fmt.Println("TABLE CODE: ", tableCode)
 
-		if _, err := app.getTable(tableCode); err != nil {
-			response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
-			app.writeToConn(conn, response)
-			continue
+			// if tableCode == 0 {
+			// 	fmt.Println("OPERATION: ", operation)
+			// }
+			if _, err := app.getTable(tableCode); err != nil {
+				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
+				app.writeToConn(conn, response)
+				continue
+			}
 		}
 
 		switch operation {
@@ -168,13 +174,13 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 			response = []byte{STATUS_SUCCESS}
 
 		case OP_FIRST:
-			if len(data) != 2+CursorIDBytes {
+			if len(data) != 2+evm.CursorIDBytes {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
 			}
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 			resp, err := app.First(tableCode, cursorId)
 			if err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
@@ -185,15 +191,15 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 		case OP_SEEK_EXACT:
 			table := app.executionTablesInfo[tableCode]
 
-			if len(data) != 2+CursorIDBytes+table.KeyBytes {
+			if len(data) != 2+evm.CursorIDBytes+table.KeyBytes {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
 			}
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 
-			key := data[2+CursorIDBytes:]
+			key := data[2+evm.CursorIDBytes:]
 			value, err := app.SeekExact(tableCode, cursorId, key)
 			if err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
@@ -206,15 +212,15 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 		case OP_SEEK:
 			table := app.executionTablesInfo[tableCode]
 
-			if len(data) != 2+CursorIDBytes+table.KeyBytes {
+			if len(data) != 2+evm.CursorIDBytes+table.KeyBytes {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
 			}
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 
-			key := data[2+CursorIDBytes:]
+			key := data[2+evm.CursorIDBytes:]
 			resp, err := app.Seek(tableCode, cursorId, key)
 			if err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
@@ -224,13 +230,13 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 			}
 
 		case OP_NEXT:
-			if len(data) != 2+CursorIDBytes {
+			if len(data) != 2+evm.CursorIDBytes {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
 			}
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 			resp, err := app.Next(tableCode, cursorId)
 			if err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
@@ -239,13 +245,13 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 			}
 
 		case OP_PREV:
-			if len(data) != 2+CursorIDBytes {
+			if len(data) != 2+evm.CursorIDBytes {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
 			}
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 			resp, err := app.Prev(tableCode, cursorId)
 			if err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
@@ -254,13 +260,13 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 			}
 
 		case OP_LAST:
-			if len(data) != 2+CursorIDBytes {
+			if len(data) != 2+evm.CursorIDBytes {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
 			}
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 			resp, err := app.Last(tableCode, cursorId)
 			if err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
@@ -269,13 +275,13 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 			}
 
 		case OP_CURRENT:
-			if len(data) != 2+CursorIDBytes {
+			if len(data) != 2+evm.CursorIDBytes {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
 			}
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 			resp, err := app.Current(tableCode, cursorId)
 			if err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
@@ -292,27 +298,27 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 			table := app.executionTablesInfo[tableCode]
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 
 			if table.DupSorted {
-				if len(data) <= 2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes {
+				if len(data) <= 2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
 				}
 
-				key = data[2+CursorIDBytes : 2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes]
-				value = data[2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes:]
+				key = data[2+evm.CursorIDBytes : 2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes]
+				value = data[2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes:]
 
-				// fmt.Printf("KEY STORAGE: %v\n", key)
-				// fmt.Printf("VALUE STORAGE: %v\n", value)
+				fmt.Printf("KEY STORAGE: %v\n", key)
+				fmt.Printf("VALUE STORAGE: %v\n", value)
 			} else {
 				if len(data) <= 2+table.KeyBytes {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
 				}
 
-				key = data[2+CursorIDBytes : 2+CursorIDBytes+table.KeyBytes]
-				value = data[2+CursorIDBytes+table.KeyBytes:]
+				key = data[2+evm.CursorIDBytes : 2+evm.CursorIDBytes+table.KeyBytes]
+				value = data[2+evm.CursorIDBytes+table.KeyBytes:]
 
 				// fmt.Printf("KEY ACCOUNT: %v\n", key)
 				// fmt.Printf("VALUE ACCOUNT: %v\n", value)
@@ -334,24 +340,24 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 			table := app.executionTablesInfo[tableCode]
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 
 			if table.DupSorted {
-				if len(data) <= 2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes {
+				if len(data) <= 2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
 				}
 
-				key = data[2+CursorIDBytes : 2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes]
-				value = data[2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes:]
+				key = data[2+evm.CursorIDBytes : 2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes]
+				value = data[2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes:]
 			} else {
 				if len(data) <= 2+table.KeyBytes {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
 				}
 
-				key = data[2+CursorIDBytes : 2+CursorIDBytes+table.KeyBytes]
-				value = data[2+CursorIDBytes+table.KeyBytes:]
+				key = data[2+evm.CursorIDBytes : 2+evm.CursorIDBytes+table.KeyBytes]
+				value = data[2+evm.CursorIDBytes+table.KeyBytes:]
 			}
 
 			if err := app.Insert(tableCode, cursorId, key, value); err != nil {
@@ -370,24 +376,24 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 			table := app.executionTablesInfo[tableCode]
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 
 			if table.DupSorted {
-				if len(data) <= 2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes {
+				if len(data) <= 2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
 				}
 
-				key = data[2+CursorIDBytes : 2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes]
-				value = data[2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes:]
+				key = data[2+evm.CursorIDBytes : 2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes]
+				value = data[2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes:]
 			} else {
 				if len(data) <= 2+table.KeyBytes {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
 				}
 
-				key = data[2+CursorIDBytes : 2+CursorIDBytes+table.KeyBytes]
-				value = data[2+CursorIDBytes+table.KeyBytes:]
+				key = data[2+evm.CursorIDBytes : 2+evm.CursorIDBytes+table.KeyBytes]
+				value = data[2+evm.CursorIDBytes+table.KeyBytes:]
 			}
 
 			if err := app.Append(tableCode, cursorId, key, value); err != nil {
@@ -397,13 +403,13 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 
 			response = []byte{STATUS_SUCCESS}
 		case OP_DELETE_CURRENT:
-			if len(data) != 2+CursorIDBytes {
+			if len(data) != 2+evm.CursorIDBytes {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
 			}
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 			if err := app.DeleteCurrent(tableCode, cursorId); err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
 			} else {
@@ -417,13 +423,13 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 				break
 			}
 
-			if len(data) != 2+CursorIDBytes {
+			if len(data) != 2+evm.CursorIDBytes {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
 			}
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 			resp, err := app.NextDup(false, tableCode, cursorId)
 			if err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
@@ -438,13 +444,13 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 				break
 			}
 
-			if len(data) != 2+CursorIDBytes {
+			if len(data) != 2+evm.CursorIDBytes {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
 			}
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 			resp, err := app.NextNoDup(tableCode, cursorId)
 			if err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
@@ -459,15 +465,15 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 				break
 			}
 
-			if len(data) != 2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes {
+			if len(data) != 2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
 			}
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 
-			key := data[2+CursorIDBytes:]
+			key := data[2+evm.CursorIDBytes:]
 			resp, err := app.SeekByKeySubkey(tableCode, cursorId, key)
 			if err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
@@ -482,13 +488,13 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 				break
 			}
 
-			if len(data) != 2+CursorIDBytes {
+			if len(data) != 2+evm.CursorIDBytes {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
 			}
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 			if err := app.DeleteCurrentDuplicates(tableCode, cursorId); err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
 			} else {
@@ -502,16 +508,16 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 				break
 			}
 
-			if len(data) <= 2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes {
+			if len(data) <= 2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes {
 				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 				break
 			}
 
-			key := data[2+CursorIDBytes : 2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes]
-			value := data[2+CursorIDBytes+table.KeyBytes+table.SubKeyBytes:]
+			key := data[2+evm.CursorIDBytes : 2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes]
+			value := data[2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes:]
 
 			var cursorId [8]byte
-			copy(cursorId[:], data[2:2+CursorIDBytes])
+			copy(cursorId[:], data[2:2+evm.CursorIDBytes])
 			if err := app.AppendDup(tableCode, cursorId, key, value); err != nil {
 				response = append([]byte{STATUS_ERROR}, []byte(err.Error())...)
 			} else {
@@ -613,17 +619,21 @@ func (app *ScalerizeApp) Delete(tableCode uint8, key []byte, keyIncludesSubkey b
 }
 
 func (app *ScalerizeApp) Write() {
-	fmt.Println("CURSOR LENGTH: ", len(ethIteratorsCurrentKey))
+	// fmt.Println("CURSOR LENGTH: ", len(evm.EthIteratorsCurrentKey))
 	// fmt.Println("WRITE CALLED")
 	app.rwMutex.Lock()
 	defer app.rwMutex.Unlock()
 
+	fmt.Println("WORKING HASH BEFORE: ", app.CommitMultiStore().WorkingHash())
 	// fmt.Println("BEFORE WRITE: ", app.CommitMultiStore().WorkingHash())
 	// fmt.Println("LAST COMMIT APP HASH BEFORE WRITE: ", app.CommitMultiStore().LastCommitID().Hash)
 	// fmt.Println("CURRENT COMMIT APP HASH BEFORE WRITE: ", app.CommitMultiStore().Commit().Hash)
 	app.executionCacheMultistore.Write()
 
-	// var accounts int
+	fmt.Println("WORKING HASH AFTER: ", app.CommitMultiStore().WorkingHash())
+
+	// accountbytes := make(map[[40]byte][]byte)
+	// accounts := [][]byte{}
 	// store := app.executionCacheMultistore.GetKVStore(app.executionTablesInfo[0].StoreKey)
 	// iterator := store.Iterator(nil, nil) // This will iterate over all keys
 	// defer iterator.Close()
@@ -632,14 +642,18 @@ func (app *ScalerizeApp) Write() {
 	// for ; iterator.Valid(); iterator.Next() {
 	// 	// key := iterator.Key()
 	// 	// value := iterator.Value()
+	// 	// var fixedKey [40]byte
+	// 	// copy(fixedKey[:], key)
+	// 	// accountbytes[fixedKey] = value
+	// 	accounts = append(accounts, iterator.Key())
 	// 	// fmt.Printf("Key: %x, Value: %x\n", key, value)
-	// 	accounts++
+	// 	// accounts++
 	// 	// For more readable output if your data is UTF-8 strings:
 	// 	// fmt.Printf("Key: %s, Value: %s\n", string(key), string(value))
 	// }
 
-	// fmt.Println("ACCOUNTS: ", accounts)
-
+	// fmt.Println("ACCOUNTS: ", len(accounts))
+	// fmt.Println(accounts)
 	// var storageSlots int
 	// store = app.executionCacheMultistore.GetKVStore(app.executionTablesInfo[1].StoreKey)
 	// iterator = store.Iterator(nil, nil) // This will iterate over all keys
@@ -660,7 +674,12 @@ func (app *ScalerizeApp) Write() {
 	// fmt.Println("LAST COMMIT APP HASH AFTER WRITE: ", app.CommitMultiStore().LastCommitID().Hash)
 
 	app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
-	ethIteratorsCurrentKey = map[[8]byte][]byte{}
+
+	fmt.Println("CURSOR LEN:", len(evm.EthIteratorsCurrentKey))
+	// evm.EthIteratorsCurrentKeyLock.Lock()
+	// defer evm.EthIteratorsCurrentKeyLock.Unlock()
+	// delete(evm.EthIteratorsCurrentKey, cursorID)
+	// fmt.Println("CURSOR LEN AFTER: ", len(evm.EthIteratorsCurrentKey))
 }
 
 // First: returns the first entry in the table and sets the cursor to that key
@@ -674,7 +693,7 @@ func (app *ScalerizeApp) First(tableCode uint8, cursorID [8]byte) ([]byte, error
 		return nil, err
 	}
 
-	// fmt.Println("ITERATOR POSITION BEFORE FIRST: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE FIRST: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(nil, nil)
 	defer iterator.Close()
@@ -683,11 +702,11 @@ func (app *ScalerizeApp) First(tableCode uint8, cursorID [8]byte) ([]byte, error
 		return nil, nil
 	}
 
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
-	ethIteratorsCurrentKey[cursorID] = iterator.Key()
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
+	evm.EthIteratorsCurrentKey[cursorID] = iterator.Key()
 
-	// fmt.Println("ITERATOR POSITION AFTER FIRST: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION AFTER FIRST: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	response := append(iterator.Key(), iterator.Value()...)
 	return response, nil
@@ -700,7 +719,7 @@ func (app *ScalerizeApp) SeekExact(tableCode uint8, cursorID [8]byte, key []byte
 	app.rwMutex.RLock()
 	defer app.rwMutex.RUnlock()
 
-	// fmt.Println("ITERATOR POSITION BEFORE SEEK_EXACT: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE SEEK_EXACT: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	table, err := app.getTable(tableCode)
 	if err != nil {
@@ -715,11 +734,11 @@ func (app *ScalerizeApp) SeekExact(tableCode uint8, cursorID [8]byte, key []byte
 		return nil, nil
 	}
 
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
-	ethIteratorsCurrentKey[cursorID] = iterator.Key()
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
+	evm.EthIteratorsCurrentKey[cursorID] = iterator.Key()
 
-	// fmt.Println("ITERATOR POSITION AFTER SEEK_EXACT: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION AFTER SEEK_EXACT: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	if (table.DupSorted && !bytes.HasPrefix(iterator.Key(), key)) ||
 		(!table.DupSorted && !bytes.Equal(key, iterator.Key())) {
@@ -738,7 +757,7 @@ func (app *ScalerizeApp) Seek(tableCode uint8, cursorID [8]byte, key []byte) ([]
 	app.rwMutex.RLock()
 	defer app.rwMutex.RUnlock()
 
-	// fmt.Println("ITERATOR POSITION BEFORE SEEK: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE SEEK: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	table, err := app.getTable(tableCode)
 	if err != nil {
@@ -752,11 +771,11 @@ func (app *ScalerizeApp) Seek(tableCode uint8, cursorID [8]byte, key []byte) ([]
 		return nil, nil
 	}
 
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
-	ethIteratorsCurrentKey[cursorID] = iterator.Key()
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
+	evm.EthIteratorsCurrentKey[cursorID] = iterator.Key()
 
-	// fmt.Println("ITERATOR POSITION AFTER SEEK: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION AFTER SEEK: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	response := append(iterator.Key(), iterator.Value()...)
 
@@ -770,16 +789,16 @@ func (app *ScalerizeApp) Next(tableCode uint8, cursorID [8]byte) ([]byte, error)
 	app.rwMutex.RLock()
 	defer app.rwMutex.RUnlock()
 
-	// fmt.Println("ITERATOR POSITION BEFORE NEXT: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE NEXT: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	table, err := app.getTable(tableCode)
 	if err != nil {
 		return nil, err
 	}
 
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
-	currentKey, ok := ethIteratorsCurrentKey[cursorID]
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
+	currentKey, ok := evm.EthIteratorsCurrentKey[cursorID]
 	if !ok {
 		return app.First(tableCode, cursorID)
 	}
@@ -796,9 +815,9 @@ func (app *ScalerizeApp) Next(tableCode uint8, cursorID [8]byte) ([]byte, error)
 		return nil, nil
 	}
 
-	ethIteratorsCurrentKey[cursorID] = iterator.Key()
+	evm.EthIteratorsCurrentKey[cursorID] = iterator.Key()
 
-	// fmt.Println("ITERATOR POSITION AFTER NEXT: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION AFTER NEXT: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	response := append(iterator.Key(), iterator.Value()...)
 
@@ -812,16 +831,16 @@ func (app *ScalerizeApp) Prev(tableCode uint8, cursorID [8]byte) ([]byte, error)
 	app.rwMutex.RLock()
 	defer app.rwMutex.RUnlock()
 
-	// fmt.Println("ITERATOR POSITION BEFORE PREV: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE PREV: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	table, err := app.getTable(tableCode)
 	if err != nil {
 		return nil, err
 	}
 
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
-	currentKey, ok := ethIteratorsCurrentKey[cursorID]
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
+	currentKey, ok := evm.EthIteratorsCurrentKey[cursorID]
 	if !ok {
 		return app.Last(tableCode, cursorID)
 	}
@@ -833,9 +852,9 @@ func (app *ScalerizeApp) Prev(tableCode uint8, cursorID [8]byte) ([]byte, error)
 		return nil, nil
 	}
 
-	ethIteratorsCurrentKey[cursorID] = iterator.Key()
+	evm.EthIteratorsCurrentKey[cursorID] = iterator.Key()
 
-	// fmt.Println("ITERATOR POSITION AFTER PREV: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION AFTER PREV: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	response := append(iterator.Key(), iterator.Value()...)
 
@@ -848,7 +867,7 @@ func (app *ScalerizeApp) Last(tableCode uint8, cursorID [8]byte) ([]byte, error)
 	app.rwMutex.RLock()
 	defer app.rwMutex.RUnlock()
 
-	// fmt.Println("ITERATOR POSITION BEFORE LAST: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE LAST: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	table, err := app.getTable(tableCode)
 	if err != nil {
@@ -862,11 +881,11 @@ func (app *ScalerizeApp) Last(tableCode uint8, cursorID [8]byte) ([]byte, error)
 		return nil, nil
 	}
 
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
-	ethIteratorsCurrentKey[cursorID] = iterator.Key()
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
+	evm.EthIteratorsCurrentKey[cursorID] = iterator.Key()
 
-	// fmt.Println("ITERATOR POSITION AFTER LAST: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION AFTER LAST: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	response := append(iterator.Key(), iterator.Value()...)
 
@@ -879,16 +898,16 @@ func (app *ScalerizeApp) Current(tableCode uint8, cursorID [8]byte) ([]byte, err
 	defer app.rwMutex.RUnlock()
 
 	// fmt.Println("CURSOR ID:", cursorID)
-	// fmt.Println("ITERATOR POSITION BEFORE CURRENT: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE CURRENT: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	table, err := app.getTable(tableCode)
 	if err != nil {
 		return nil, err
 	}
 
-	ethIteratorsCurrentKeyLock.RLock()
-	defer ethIteratorsCurrentKeyLock.RUnlock()
-	currentKey, ok := ethIteratorsCurrentKey[cursorID]
+	evm.EthIteratorsCurrentKeyLock.RLock()
+	defer evm.EthIteratorsCurrentKeyLock.RUnlock()
+	currentKey, ok := evm.EthIteratorsCurrentKey[cursorID]
 	if !ok {
 		return nil, ErrCurrentKeyIsNotSet
 	}
@@ -900,7 +919,7 @@ func (app *ScalerizeApp) Current(tableCode uint8, cursorID [8]byte) ([]byte, err
 
 	value := app.CommitMultiStore().GetKVStore(table.StoreKey).Get(currentKey)
 
-	// fmt.Println("ITERATOR POSITION AFTER CURRENT: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION AFTER CURRENT: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	response := append(currentKey, value...)
 
@@ -909,18 +928,19 @@ func (app *ScalerizeApp) Current(tableCode uint8, cursorID [8]byte) ([]byte, err
 
 // Upsert: same as put but also set the cursor key
 func (app *ScalerizeApp) Upsert(tableCode uint8, cursorID [8]byte, key, value []byte) error {
-	// fmt.Println("ITERATOR POSITION BEFORE UPSERT: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE UPSERT: ", evm.EthIteratorsCurrentKey[cursorID])
 
-	// fmt.Println("UPSERT KEY: ", key)
+	fmt.Println("UPSERT KEY: ", key)
+	fmt.Println("UPSERT VALUE: ", value)
 	if err := app.Put(tableCode, key, value); err != nil {
 		return err
 	}
 
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
-	ethIteratorsCurrentKey[cursorID] = key
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
+	evm.EthIteratorsCurrentKey[cursorID] = key
 
-	// fmt.Println("ITERATOR POSITION BEFORE UPSERT: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE UPSERT: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	return nil
 }
@@ -932,7 +952,7 @@ func (app *ScalerizeApp) Insert(tableCode uint8, cursorID [8]byte, key, value []
 	app.rwMutex.Lock()
 	defer app.rwMutex.Unlock()
 
-	// fmt.Println("ITERATOR POSITION BEFORE INSERT: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE INSERT: ", evm.EthIteratorsCurrentKey[cursorID])
 	table, err := app.getTable(tableCode)
 	if err != nil {
 		return err
@@ -957,11 +977,11 @@ func (app *ScalerizeApp) Insert(tableCode uint8, cursorID [8]byte, key, value []
 
 	store.Set(key, value)
 
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
-	ethIteratorsCurrentKey[cursorID] = key
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
+	evm.EthIteratorsCurrentKey[cursorID] = key
 
-	// fmt.Println("ITERATOR POSITION BEFORE INSERT: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE INSERT: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	return nil
 }
@@ -974,7 +994,7 @@ func (app *ScalerizeApp) Append(tableCode uint8, cursorID [8]byte, k, value []by
 	app.rwMutex.Lock()
 	defer app.rwMutex.Unlock()
 
-	// fmt.Println("ITERATOR POSITION BEFORE APPEND: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE APPEND: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	var key []byte
 
@@ -1004,11 +1024,11 @@ func (app *ScalerizeApp) Append(tableCode uint8, cursorID [8]byte, k, value []by
 	}
 
 	store.Set(k, value)
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
-	ethIteratorsCurrentKey[cursorID] = k
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
+	evm.EthIteratorsCurrentKey[cursorID] = k
 
-	// fmt.Println("ITERATOR POSITION AFTER APPEND: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION AFTER APPEND: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	return nil
 }
@@ -1020,14 +1040,14 @@ func (app *ScalerizeApp) DeleteCurrent(tableCode uint8, cursorID [8]byte) error 
 	app.rwMutex.Lock()
 	defer app.rwMutex.Unlock()
 
-	// fmt.Println("ITERATOR POSITION BEFORE DELETE CURRENT: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE DELETE CURRENT: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	table, err := app.getTable(tableCode)
 	if err != nil {
 		return err
 	}
 
-	currentKey, ok := ethIteratorsCurrentKey[cursorID]
+	currentKey, ok := evm.EthIteratorsCurrentKey[cursorID]
 	if !ok {
 		return ErrCurrentKeyIsNotSet
 	}
@@ -1043,15 +1063,15 @@ func (app *ScalerizeApp) DeleteCurrent(tableCode uint8, cursorID [8]byte) error 
 	store.Delete(currentKey)
 
 	iterator.Next()
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
 	if !iterator.Valid() {
-		delete(ethIteratorsCurrentKey, cursorID)
+		delete(evm.EthIteratorsCurrentKey, cursorID)
 	} else {
-		ethIteratorsCurrentKey[cursorID] = iterator.Key()
+		evm.EthIteratorsCurrentKey[cursorID] = iterator.Key()
 	}
 
-	// fmt.Println("ITERATOR POSITION AFTER DELETE CURRENT: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION AFTER DELETE CURRENT: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	return nil
 }
@@ -1064,7 +1084,7 @@ func (app *ScalerizeApp) NextDup(onlyVal bool, tableCode uint8, cursorID [8]byte
 
 	var response []byte
 
-	// fmt.Println("ITERATOR POSITION BEFORE NEXT DUP: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE NEXT DUP: ", evm.EthIteratorsCurrentKey[cursorID])
 	// fmt.Println("ONLY VAL: ", onlyVal)
 
 	table, err := app.getTable(tableCode)
@@ -1076,9 +1096,9 @@ func (app *ScalerizeApp) NextDup(onlyVal bool, tableCode uint8, cursorID [8]byte
 		return nil, ErrInvalidRequestData
 	}
 
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
-	currentKey, ok := ethIteratorsCurrentKey[cursorID]
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
+	currentKey, ok := evm.EthIteratorsCurrentKey[cursorID]
 	if !ok {
 		resp, err := app.First(tableCode, cursorID)
 		if onlyVal && err == nil {
@@ -1106,9 +1126,9 @@ func (app *ScalerizeApp) NextDup(onlyVal bool, tableCode uint8, cursorID [8]byte
 	}
 
 	if bytes.HasPrefix(iterator.Key(), key) {
-		ethIteratorsCurrentKey[cursorID] = iterator.Key()
+		evm.EthIteratorsCurrentKey[cursorID] = iterator.Key()
 
-		// fmt.Println("ITERATOR POSITION AFTER NEXT DUP: ", ethIteratorsCurrentKey[cursorID])
+		// fmt.Println("ITERATOR POSITION AFTER NEXT DUP: ", evm.EthIteratorsCurrentKey[cursorID])
 
 		if onlyVal {
 			response = append(iterator.Key()[table.KeyBytes:], iterator.Value()...)
@@ -1126,7 +1146,7 @@ func (app *ScalerizeApp) NextNoDup(tableCode uint8, cursorID [8]byte) ([]byte, e
 	app.rwMutex.RLock()
 	defer app.rwMutex.RUnlock()
 
-	// fmt.Println("ITERATOR POSITION BEFORE NEXT NO DUP: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE NEXT NO DUP: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	table, err := app.getTable(tableCode)
 	if err != nil {
@@ -1137,9 +1157,9 @@ func (app *ScalerizeApp) NextNoDup(tableCode uint8, cursorID [8]byte) ([]byte, e
 		return nil, ErrInvalidRequestData
 	}
 
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
-	currentKey, ok := ethIteratorsCurrentKey[cursorID]
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
+	currentKey, ok := evm.EthIteratorsCurrentKey[cursorID]
 	if !ok {
 		return app.First(tableCode, cursorID)
 	}
@@ -1156,8 +1176,8 @@ func (app *ScalerizeApp) NextNoDup(tableCode uint8, cursorID [8]byte) ([]byte, e
 		return nil, nil
 	}
 
-	ethIteratorsCurrentKey[cursorID] = iterator.Key()
-	// fmt.Println("ITERATOR POSITION AFTER NEXT NO DUP: ", ethIteratorsCurrentKey[cursorID])
+	evm.EthIteratorsCurrentKey[cursorID] = iterator.Key()
+	// fmt.Println("ITERATOR POSITION AFTER NEXT NO DUP: ", evm.EthIteratorsCurrentKey[cursorID])
 	response := append(iterator.Key(), iterator.Value()...)
 
 	return response, nil
@@ -1281,7 +1301,7 @@ func (app *ScalerizeApp) SeekByKeySubkey(tableCode uint8, cursorID [8]byte, key 
 
 	// 	fmt.Printf("PROOF: %+v: %+v\n", value, proof)
 	// }
-	// fmt.Println("ITERATOR POSITION BEFORE SEEK BY KEY SUBKEY: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE SEEK BY KEY SUBKEY: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	// rpcEndpoint := "http://localhost:26657" // Replace with your node's RPC endpoint
 	// cometBFTClient, err := CreateCometBFTClient(rpcEndpoint)
@@ -1351,17 +1371,17 @@ func (app *ScalerizeApp) SeekByKeySubkey(tableCode uint8, cursorID [8]byte, key 
 	iterator := app.CommitMultiStore().GetCommitKVStore(table.StoreKey).Iterator(key, nil)
 	defer iterator.Close()
 
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
 
 	if !iterator.Valid() {
 		// fmt.Println("KEYSUBKEY CASE 1")
-		delete(ethIteratorsCurrentKey, cursorID)
+		delete(evm.EthIteratorsCurrentKey, cursorID)
 		return nil, nil
 	}
 
-	ethIteratorsCurrentKey[cursorID] = iterator.Key()
-	// fmt.Println("ITERATOR POSITION AFTER SEEK BY KEY SUBKEY: ", ethIteratorsCurrentKey[cursorID])
+	evm.EthIteratorsCurrentKey[cursorID] = iterator.Key()
+	// fmt.Println("ITERATOR POSITION AFTER SEEK BY KEY SUBKEY: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	if !bytes.HasPrefix(iterator.Key(), key[:table.KeyBytes]) {
 		// fmt.Println("KEYSUBKEY CASE 2")
@@ -1381,7 +1401,7 @@ func (app *ScalerizeApp) DeleteCurrentDuplicates(tableCode uint8, cursorID [8]by
 	app.rwMutex.Lock()
 	defer app.rwMutex.Unlock()
 
-	// fmt.Println("ITERATOR POSITION BEFORE DELETE CURRENT DUPLICATES: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE DELETE CURRENT DUPLICATES: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	table, err := app.getTable(tableCode)
 	if err != nil {
@@ -1392,9 +1412,9 @@ func (app *ScalerizeApp) DeleteCurrentDuplicates(tableCode uint8, cursorID [8]by
 		return ErrInvalidRequestData
 	}
 
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
-	currentKey, ok := ethIteratorsCurrentKey[cursorID]
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
+	currentKey, ok := evm.EthIteratorsCurrentKey[cursorID]
 	if !ok {
 		return ErrCurrentKeyIsNotSet
 	}
@@ -1417,12 +1437,12 @@ func (app *ScalerizeApp) DeleteCurrentDuplicates(tableCode uint8, cursorID [8]by
 	defer nextIterator.Close()
 
 	if !nextIterator.Valid() {
-		delete(ethIteratorsCurrentKey, cursorID)
+		delete(evm.EthIteratorsCurrentKey, cursorID)
 	} else {
-		ethIteratorsCurrentKey[cursorID] = nextIterator.Key()
+		evm.EthIteratorsCurrentKey[cursorID] = nextIterator.Key()
 	}
 
-	// fmt.Println("ITERATOR POSITION AFTER DELETE CURRENT DUPLICATES: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION AFTER DELETE CURRENT DUPLICATES: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	return nil
 }
@@ -1434,7 +1454,7 @@ func (app *ScalerizeApp) AppendDup(tableCode uint8, cursorID [8]byte, k, value [
 	app.rwMutex.Lock()
 	defer app.rwMutex.Unlock()
 
-	// fmt.Println("ITERATOR POSITION BEFORE APPEND DUP: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION BEFORE APPEND DUP: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	table, err := app.getTable(tableCode)
 	if err != nil {
@@ -1452,12 +1472,12 @@ func (app *ScalerizeApp) AppendDup(tableCode uint8, cursorID [8]byte, k, value [
 	iterator := store.ReverseIterator(key, storetypes.PrefixEndBytes(key))
 	defer iterator.Close()
 
-	ethIteratorsCurrentKeyLock.Lock()
-	defer ethIteratorsCurrentKeyLock.Unlock()
+	evm.EthIteratorsCurrentKeyLock.Lock()
+	defer evm.EthIteratorsCurrentKeyLock.Unlock()
 	if !iterator.Valid() {
 		// fmt.Println("APPEND DUP CASE 1")
 		store.Set(k, value)
-		ethIteratorsCurrentKey[cursorID] = k
+		evm.EthIteratorsCurrentKey[cursorID] = k
 	} else {
 		greatestSubkey := iterator.Key()[table.KeyBytes:]
 		// fmt.Println("SUBKEY: ", subkey)
@@ -1472,10 +1492,10 @@ func (app *ScalerizeApp) AppendDup(tableCode uint8, cursorID [8]byte, k, value [
 		// fmt.Println("APPEND DUP CASE 3")
 		store.Set(k, value)
 
-		ethIteratorsCurrentKey[cursorID] = k
+		evm.EthIteratorsCurrentKey[cursorID] = k
 	}
 
-	// fmt.Println("ITERATOR POSITION AFTER APPEND DUP: ", ethIteratorsCurrentKey[cursorID])
+	// fmt.Println("ITERATOR POSITION AFTER APPEND DUP: ", evm.EthIteratorsCurrentKey[cursorID])
 
 	return nil
 }

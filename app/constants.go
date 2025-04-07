@@ -1,12 +1,5 @@
 package app
 
-import "sync"
-
-var (
-	ethIteratorsCurrentKey     = make(map[[CursorIDBytes]byte][]byte)
-	ethIteratorsCurrentKeyLock sync.RWMutex
-)
-
 const (
 	// DbTx and DbTxMut for both regular and dup-sorted tables
 	OP_PUT    byte = 1
@@ -62,8 +55,6 @@ const (
 	EthAccountAddressBytes = 20
 	EthBlockNumberBytes    = 8
 	EthBlockHashBytes      = 32
-
-	CursorIDBytes = 8
 )
 
 const (
