@@ -15,7 +15,7 @@ import (
 
 type JWTSecret [32]byte
 
-func (c *EVMClient) refreshJWTForRPCClient(
+func (c *EVMClient) refreshJWTForClient(
 	ctx context.Context,
 	clientType string,
 ) {

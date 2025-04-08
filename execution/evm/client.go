@@ -46,7 +46,7 @@ func (c *EVMClient) Start(ctx context.Context, ensureClientCreatedCh chan bool) 
 
 	defer func() {
 		ticker.Stop()
-		go c.refreshJWTForRPCClient(ctx, engineClient)
+		go c.refreshJWTForClient(ctx, engineClient)
 	}()
 
 	c.logger.Info("Connecting to the execution client")
@@ -66,7 +66,7 @@ func (c *EVMClient) Start(ctx context.Context, ensureClientCreatedCh chan bool) 
 		}
 	}()
 
-	c.logger.Info("Initializing connection with Ethereum RPC API: " + c.config.EngineAPIURL().String())
+	c.logger.Info("Initializing connection with Ethereum RPC API: " + c.config.RPCURL().String())
 	go func() {
 		defer wg.Done()
 		for range ticker.C {
