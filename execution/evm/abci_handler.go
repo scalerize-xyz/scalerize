@@ -14,8 +14,6 @@ import (
 
 func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
-		// todo: put retries for rpc and engine api calls
-
 		// the store reflects the changes made through the web server created for crud operations in multistore
 		// params := evmtypes.Params{}
 		// kvstore := ctx.KVStore(evmtypes.EVMStoreKey)

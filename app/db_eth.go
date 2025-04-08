@@ -1295,6 +1295,9 @@ func (app *ScalerizeApp) SeekByKeySubkey(tableCode uint8, cursorID [8]byte, key 
 	// 	// fmt.Printf("ABCI QUERY: %+v : : %+v\n", value, proof)
 	// }
 
+	app.rwMutex.RLock()
+	defer app.rwMutex.RUnlock()
+
 	table, err := app.getTable(tableCode)
 	if err != nil {
 		return nil, err
