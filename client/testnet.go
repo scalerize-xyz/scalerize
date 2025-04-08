@@ -529,6 +529,9 @@ func calculateIP(ip string, i int) (string, error) {
 
 	for j := 0; j < i; j++ {
 		ipv4[3]++
+		if ipv4[3] == 0 {
+			return "", fmt.Errorf("IP address overflow after %d increments", i)
+		}
 	}
 
 	return ipv4.String(), nil

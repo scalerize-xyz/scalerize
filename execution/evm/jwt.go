@@ -15,12 +15,12 @@ import (
 
 type JWTSecret [32]byte
 
-func (c *EVMClient) refreshJWTForRPCClient(
+func (c *EVMClient) refreshJWTForClient(
 	ctx context.Context,
 	clientType string,
 ) {
 	c.logger.Info("Starting JWT refresh loop 🔄")
-	ticker := time.NewTicker(c.config.rpcJWTRefreshInterval)
+	ticker := time.NewTicker(c.config.RPCJWTRefreshInterval())
 	for {
 		select {
 		case <-ctx.Done():
@@ -62,7 +62,7 @@ func getJWTFromPath(path string) (JWTSecret, error) {
 func (c *EVMClient) buildJWTHeader() (http.Header, error) {
 	header := make(http.Header)
 
-	token, err := buildSignedJWT(c.config.jwtSecret)
+	token, err := buildSignedJWT(c.config.JWTSecret())
 	if err != nil {
 		return header, err
 	}

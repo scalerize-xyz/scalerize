@@ -1,4 +1,4 @@
-# !/bin/sh
+#!/bin/sh
 ETH_DATA_DIR=.scalerized/eth
 JWT_PATH=testing/files/jwt.hex
 ETH_GENESIS_PATH=testing/files/eth-genesis.json
@@ -26,7 +26,7 @@ get_enode() {
     sleep $delay
   done
 
-  echo "Failed to get a valid response from $BOOTNODE_RPC_URL after $retries attempts."
+  echo "Failed to get a valid response from http://$BOOTNODE_IP:$BOOTNODE_RPC_PORT after $retries attempts."
   return 1
 }
 
