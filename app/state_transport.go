@@ -101,12 +101,27 @@ func (app *ScalerizeApp) handleStateQuery(conn net.Conn) {
 				blockSpecBytes int
 			)
 
+			if len(data) < 2 {
+				response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+				break
+			}
+
 			if data[1] == 0 {
+				if len(data) < 2+EthBlockNumberBytes {
+					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+					break
+				}
+
 				bn := data[2 : 2+EthBlockNumberBytes]
 				bnInt := int64(binary.BigEndian.Uint64(bn))
 				blockNumOrHash.BlockNumber = &bnInt
 				blockSpecBytes = EthBlockNumberBytes
 			} else if data[1] == 1 {
+				if len(data) < 2+EthBlockHashBytes {
+					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
+					break
+				}
+
 				bh := data[2 : 2+EthBlockHashBytes]
 				blockNumOrHash.BlockHash = &common.Hash{}
 				copy(blockNumOrHash.BlockHash[:], bh)
