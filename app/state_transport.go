@@ -125,7 +125,7 @@ func (app *ScalerizeApp) handleStateQuery(conn net.Conn) {
 				break
 			}
 
-			address := data[2+blockSpecBytes : 1+blockSpecBytes+SerializedHashedAccountsKeyBytes]
+			address := data[addressStart:addressEnd]
 
 			if len(data) == 2+blockSpecBytes+SerializedHashedAccountsKeyBytes {
 				storageKeys = [][]byte{}

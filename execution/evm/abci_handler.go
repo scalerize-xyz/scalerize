@@ -65,6 +65,10 @@ func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 			return nil, err
 		}
 
+		if fcres.PayloadID == nil {
+			return nil, fmt.Errorf("payload ID is nil")
+		}
+
 		fmt.Printf("ForkchoiceUpdated response: %+v\n", fcres)
 
 		time.Sleep(10 * time.Millisecond)
