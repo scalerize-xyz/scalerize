@@ -544,7 +544,7 @@ func (app *ScalerizeApp) Get(tableCode uint8, key []byte) ([]byte, error) {
 	}
 
 	if table.DupSorted {
-		iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(key, storetypes.PrefixEndBytes(key))
+		iterator := app.executionCacheMultistore.GetKVStore(table.StoreKey).Iterator(key, storetypes.PrefixEndBytes(key))
 		defer iterator.Close()
 
 		if !iterator.Valid() {
@@ -558,11 +558,11 @@ func (app *ScalerizeApp) Get(tableCode uint8, key []byte) ([]byte, error) {
 		return response, nil
 	}
 
-	if !app.CommitMultiStore().GetKVStore(table.StoreKey).Has(key) {
+	if !app.executionCacheMultistore.GetKVStore(table.StoreKey).Has(key) {
 		return nil, nil
 	}
 
-	return app.CommitMultiStore().GetKVStore(table.StoreKey).Get(key), nil
+	return app.executionCacheMultistore.GetKVStore(table.StoreKey).Get(key), nil
 }
 
 // Put: adds a new entry
@@ -601,7 +601,7 @@ func (app *ScalerizeApp) Delete(tableCode uint8, key []byte, keyIncludesSubkey b
 			return nil
 		}
 
-		iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(key, storetypes.PrefixEndBytes(key))
+		iterator := app.executionCacheMultistore.GetKVStore(table.StoreKey).Iterator(key, storetypes.PrefixEndBytes(key))
 		defer iterator.Close()
 		// fmt.Println("KEY: ", key)
 
@@ -633,26 +633,26 @@ func (app *ScalerizeApp) Write() {
 	fmt.Println("WORKING HASH AFTER: ", app.CommitMultiStore().WorkingHash())
 
 	// accountbytes := make(map[[40]byte][]byte)
-	// accounts := [][]byte{}
-	// store := app.executionCacheMultistore.GetKVStore(app.executionTablesInfo[0].StoreKey)
-	// iterator := store.Iterator(nil, nil) // This will iterate over all keys
-	// defer iterator.Close()
+	accounts := [][]byte{}
+	store := app.executionCacheMultistore.GetKVStore(app.executionTablesInfo[0].StoreKey)
+	iterator := store.Iterator(nil, nil) // This will iterate over all keys
+	defer iterator.Close()
 
-	// fmt.Println("All data in store:", app.executionTablesInfo[0].StoreKey.Name())
-	// for ; iterator.Valid(); iterator.Next() {
-	// 	// key := iterator.Key()
-	// 	// value := iterator.Value()
-	// 	// var fixedKey [40]byte
-	// 	// copy(fixedKey[:], key)
-	// 	// accountbytes[fixedKey] = value
-	// 	accounts = append(accounts, iterator.Key())
-	// 	// fmt.Printf("Key: %x, Value: %x\n", key, value)
-	// 	// accounts++
-	// 	// For more readable output if your data is UTF-8 strings:
-	// 	// fmt.Printf("Key: %s, Value: %s\n", string(key), string(value))
-	// }
+	fmt.Println("All data in store:", app.executionTablesInfo[0].StoreKey.Name())
+	for ; iterator.Valid(); iterator.Next() {
+		// key := iterator.Key()
+		// value := iterator.Value()
+		// var fixedKey [40]byte
+		// copy(fixedKey[:], key)
+		// accountbytes[fixedKey] = value
+		accounts = append(accounts, iterator.Key())
+		// fmt.Printf("Key: %x, Value: %x\n", key, value)
+		// accounts++
+		// For more readable output if your data is UTF-8 strings:
+		// fmt.Printf("Key: %s, Value: %s\n", string(key), string(value))
+	}
 
-	// fmt.Println("ACCOUNTS: ", len(accounts))
+	fmt.Println("ACCOUNTS: ", len(accounts))
 	// fmt.Println(accounts)
 	// var storageSlots int
 	// store = app.executionCacheMultistore.GetKVStore(app.executionTablesInfo[1].StoreKey)
@@ -695,7 +695,7 @@ func (app *ScalerizeApp) First(tableCode uint8, cursorID [8]byte) ([]byte, error
 
 	// fmt.Println("ITERATOR POSITION BEFORE FIRST: ", evm.EthIteratorsCurrentKey[cursorID])
 
-	iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(nil, nil)
+	iterator := app.executionCacheMultistore.GetKVStore(table.StoreKey).Iterator(nil, nil)
 	defer iterator.Close()
 
 	if !iterator.Valid() {
@@ -727,7 +727,7 @@ func (app *ScalerizeApp) SeekExact(tableCode uint8, cursorID [8]byte, key []byte
 	}
 
 	// if key does not exists then the iterator start domain is set to the next greater key
-	iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(key, nil)
+	iterator := app.executionCacheMultistore.GetKVStore(table.StoreKey).Iterator(key, nil)
 	defer iterator.Close()
 
 	if !iterator.Valid() {
@@ -764,7 +764,7 @@ func (app *ScalerizeApp) Seek(tableCode uint8, cursorID [8]byte, key []byte) ([]
 		return nil, err
 	}
 
-	iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(key, nil)
+	iterator := app.executionCacheMultistore.GetKVStore(table.StoreKey).Iterator(key, nil)
 	defer iterator.Close()
 
 	if !iterator.Valid() {
@@ -803,7 +803,7 @@ func (app *ScalerizeApp) Next(tableCode uint8, cursorID [8]byte) ([]byte, error)
 		return app.First(tableCode, cursorID)
 	}
 
-	iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).Iterator(currentKey, nil)
+	iterator := app.executionCacheMultistore.GetKVStore(table.StoreKey).Iterator(currentKey, nil)
 	defer iterator.Close()
 
 	if !iterator.Valid() {
@@ -845,7 +845,7 @@ func (app *ScalerizeApp) Prev(tableCode uint8, cursorID [8]byte) ([]byte, error)
 		return app.Last(tableCode, cursorID)
 	}
 
-	iterator := app.CommitMultiStore().GetCommitKVStore(table.StoreKey).ReverseIterator(nil, currentKey)
+	iterator := app.executionCacheMultistore.GetKVStore(table.StoreKey).ReverseIterator(nil, currentKey)
 	defer iterator.Close()
 
 	if !iterator.Valid() {
@@ -874,7 +874,7 @@ func (app *ScalerizeApp) Last(tableCode uint8, cursorID [8]byte) ([]byte, error)
 		return nil, err
 	}
 
-	iterator := app.CommitMultiStore().GetKVStore(table.StoreKey).ReverseIterator(nil, nil)
+	iterator := app.executionCacheMultistore.GetKVStore(table.StoreKey).ReverseIterator(nil, nil)
 	defer iterator.Close()
 
 	if !iterator.Valid() {
@@ -912,12 +912,12 @@ func (app *ScalerizeApp) Current(tableCode uint8, cursorID [8]byte) ([]byte, err
 		return nil, ErrCurrentKeyIsNotSet
 	}
 
-	store := app.CommitMultiStore().GetKVStore(table.StoreKey)
+	store := app.executionCacheMultistore.GetKVStore(table.StoreKey)
 	if !store.Has(currentKey) {
 		return nil, nil
 	}
 
-	value := app.CommitMultiStore().GetKVStore(table.StoreKey).Get(currentKey)
+	value := app.executionCacheMultistore.GetKVStore(table.StoreKey).Get(currentKey)
 
 	// fmt.Println("ITERATOR POSITION AFTER CURRENT: ", evm.EthIteratorsCurrentKey[cursorID])
 
@@ -1112,7 +1112,7 @@ func (app *ScalerizeApp) NextDup(onlyVal bool, tableCode uint8, cursorID [8]byte
 	// fmt.Println("CURRENT KEY: ", currentKey)
 	// fmt.Println("KEY: ", key)
 
-	iterator := app.CommitMultiStore().GetCommitKVStore(table.StoreKey).Iterator(currentKey, storetypes.PrefixEndBytes(key))
+	iterator := app.executionCacheMultistore.GetKVStore(table.StoreKey).Iterator(currentKey, storetypes.PrefixEndBytes(key))
 	defer iterator.Close()
 
 	if !iterator.Valid() {
@@ -1168,7 +1168,7 @@ func (app *ScalerizeApp) NextNoDup(tableCode uint8, cursorID [8]byte) ([]byte, e
 	// fmt.Println("CURRENT KEY: ", currentKey)
 	// fmt.Println("KEY: ", key)
 
-	iterator := app.CommitMultiStore().GetCommitKVStore(table.StoreKey).Iterator(storetypes.PrefixEndBytes(key), nil)
+	iterator := app.executionCacheMultistore.GetKVStore(table.StoreKey).Iterator(storetypes.PrefixEndBytes(key), nil)
 	defer iterator.Close()
 
 	if !iterator.Valid() {
@@ -1368,7 +1368,7 @@ func (app *ScalerizeApp) SeekByKeySubkey(tableCode uint8, cursorID [8]byte, key 
 		return nil, ErrInvalidRequestData
 	}
 
-	iterator := app.CommitMultiStore().GetCommitKVStore(table.StoreKey).Iterator(key, nil)
+	iterator := app.executionCacheMultistore.GetKVStore(table.StoreKey).Iterator(key, nil)
 	defer iterator.Close()
 
 	evm.EthIteratorsCurrentKeyLock.Lock()
