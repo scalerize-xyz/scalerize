@@ -15,8 +15,6 @@ import (
 func (app *ScalerizeApp) StartStateRouter(clientType string) {
 	os.Remove(socketPath)
 
-	app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
-
 	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: socketPath, Net: "unix"})
 	if err != nil {
 		panic(err)
@@ -130,7 +128,7 @@ func (app *ScalerizeApp) handleStateQuery(conn net.Conn) {
 			if len(data) == 2+blockSpecBytes+SerializedHashedAccountsKeyBytes {
 				storageKeys = [][]byte{}
 			} else {
-				storageKeysBytes := len(data) - 1 + EthBlockNumberBytes + EthAccountAddressBytes
+				storageKeysBytes := len(data) - 2 - blockSpecBytes - SerializedHashedAccountsKeyBytes
 				if storageKeysBytes%(SerializedHashedStoragesKeyBytes+SerializedHashedStoragesSubKeyBytes) != 0 {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
 					break
