@@ -152,7 +152,9 @@ func (app *ScalerizeApp) handleStateQuery(conn net.Conn) {
 				noOfStorageKeys := storageKeysBytes / (SerializedHashedStoragesKeyBytes + SerializedHashedStoragesSubKeyBytes)
 
 				for i := range noOfStorageKeys {
-					storageKey := data[1+EthBlockNumberBytes+SerializedHashedAccountsKeyBytes+i*(SerializedHashedStoragesKeyBytes+SerializedHashedStoragesSubKeyBytes) : (i+1)*(SerializedHashedStoragesKeyBytes+SerializedHashedStoragesSubKeyBytes)]
+					start := addressEnd + i*(SerializedHashedStoragesKeyBytes+SerializedHashedStoragesSubKeyBytes)
+					end := addressEnd + (i+1)*(SerializedHashedStoragesKeyBytes+SerializedHashedStoragesSubKeyBytes)
+					storageKey := data[start:end]
 					storageKeys = append(storageKeys, storageKey)
 				}
 			}
