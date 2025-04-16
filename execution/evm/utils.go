@@ -1,6 +1,7 @@
 package evm
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -8,6 +9,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 )
+
+func (evmClient *EVMClient) getSyncStatus() (bool, error) {
+	status, err := evmClient.cosmosRPCClient.Status(context.Background())
+	if err != nil {
+		return false, err
+	}
+
+	return status.SyncInfo.CatchingUp, nil
+}
 
 func generateRandao() (common.Hash, error) {
 	var hash common.Hash

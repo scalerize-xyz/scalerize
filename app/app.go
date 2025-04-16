@@ -7,6 +7,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/cometbft/cometbft/abci/types"
 	dbm "github.com/cosmos/cosmos-db"
 
 	"cosmossdk.io/core/appconfig"
@@ -146,7 +147,6 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
-	// iavl.AsyncPruningOption()
 	dbSocketPath = appOpts.Get(params.FlagDBSocketPath).(string)
 	stateSocketPath = appOpts.Get(params.FlagStateSocketPath).(string)
 	cometBFTRPCAddress = appOpts.Get(params.FlagCometBFTRPCAddress).(string)
@@ -201,6 +201,13 @@ func NewScalerizeApp(
 
 	go app.StartDBRouter(clientType)
 	go app.StartStateRouter(clientType)
+	go executionClient.SetCosmosRPCClient(cometBFTRPCAddress)
+	// go func() {
+	// 	time.Sleep(10 * time.Second)
+	// 	if err := app.StartSyncMonitor(1 * time.Second); err != nil {
+	// 		panic(err)
+	// 	}
+	// }()
 	// go func() {
 	// 	time.Sleep(20 * time.Second)
 	// 	c := app.CommitMultiStore().CacheMultiStore()
@@ -278,6 +285,47 @@ func (app *ScalerizeApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.
 		panic(err)
 	}
 }
+
+func (app *ScalerizeApp) FinalizeBlock(req *types.RequestFinalizeBlock) (*types.ResponseFinalizeBlock, error) {
+	fmt.Println("THIS FINALIZE BLOCK")
+	resp, err := app.BaseApp.FinalizeBlock(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+// func (app *ScalerizeApp) StartSyncMonitor(checkInterval time.Duration) error {
+// 	cometbftClient, err := createCometBFTClient(cometBFTRPCAddress)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	cosmosSDKClient, err := createCosmosClient(cometbftClient)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	for {
+// 		fmt.Println("*******************")
+// 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+// 		status, err := cosmosSDKClient.Client.Status(ctx)
+// 		fmt.Println("SYNCING STATUS: ", status.SyncInfo.CatchingUp)
+// 		cancel()
+
+// 		if err == nil {
+// 			fmt.Println("SYNCING STATUS: ", status.SyncInfo.CatchingUp)
+// 			app.Logger().Info("Updated sync status",
+// 				"catching_up", status.SyncInfo.CatchingUp,
+// 				"latest_block_height", status.SyncInfo.LatestBlockHeight)
+// 		} else {
+// 			app.Logger().Error("Failed to get node status", "error", err)
+// 		}
+
+// 		time.Sleep(checkInterval)
+// 	}
+// }
 
 // func GetProof(clientCtx client.Context, storeKey string, key []byte) ([]byte, *crypto.ProofOps, error) {
 // 	height := clientCtx.Height

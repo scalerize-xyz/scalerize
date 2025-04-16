@@ -5,7 +5,7 @@ services:
     container_name: scalerizednode0
     image: "scalerize/node"
     ports:
-      - "26657:26657"
+      - "26650:26657"
       - "8544:8545"
       - "8543:8546"
       - "8125:8125"
@@ -26,7 +26,7 @@ services:
     container_name: scalerizednode1
     image: "scalerize/node"
     ports:
-      - "26658:26657"
+      - "26655:26657"
       - "8555:8545"
       - "8556:8546"
       - "8126:8125"
@@ -85,13 +85,35 @@ services:
         ipv4_address: 172.20.0.5
     entrypoint: "bash start-testnet-node.sh"
 
+  scalerizednode4:
+    container_name: scalerizednode4
+    image: "scalerize/node"
+    environment:
+      - ID=4
+      - LOG=${LOG:-scalerized.log}
+      - ENGINE_API=http://172.20.0.11:8551
+      - RPC_API=http://172.20.0.11:8545
+      - RPC_SERVERS=http://172.20.0.6:26657,http://172.20.0.7:26657,http://172.20.0.8:26657,http://172.20.0.9:26657
+      - TRUSTED_HEIGHT=10
+    ports:
+      - "26661:26657"
+      - "8585:8545"
+      - "8586:8546"
+      - "8129:8125"
+    volumes:
+      - shared-volume-node4:/tmp/ipc
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.10
+    entrypoint: "tail -f /dev/null"
+
   reth-bootnode:
     container_name: reth-bootnode
     image: "nikhilsharmawe/reth"  
     ports:
-      - "8551:8551"
-      - "8545:8545"
-      - "30303:30303"
+      - "8550:8551"
+      - "8541:8545"
+      - "30301:30303"
     env_file: "reth.env"
     volumes:
       - shared-volume-node0:/tmp/ipc
@@ -155,6 +177,25 @@ services:
         ipv4_address: 172.20.0.9
     entrypoint: ["/bin/sh", "-c", "bash start-testnet-reth-miner-node.sh"]
 
+  rethnode3:
+      container_name: rethnode3
+      image: "nikhilsharmawe/reth"
+      environment:
+        - BOOTNODE_IP=172.20.0.6
+        - BOOTNODE_RPC_PORT=8545
+      ports:
+        - "8559:8551"
+        - "8549:8545"
+        - "30307:30303"
+      env_file: "reth.env"
+      volumes:
+        - shared-volume-node4:/tmp/ipc
+      networks:
+        scalerize-net:
+          ipv4_address: 172.20.0.11
+      entrypoint: "tail -f /dev/null"
+
+
 networks:
   scalerize-net:
     driver: bridge
@@ -167,3 +208,4 @@ volumes:
   shared-volume-node1:
   shared-volume-node2:
   shared-volume-node3:
+  shared-volume-node4:

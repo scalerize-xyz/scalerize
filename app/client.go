@@ -18,6 +18,7 @@ type ExecutionClient interface {
 	Name() string
 	Start(ctx context.Context, ready chan bool) error
 	SetApp(*baseapp.BaseApp)
+	SetCosmosRPCClient(string)
 	ABCIHandler
 }
 

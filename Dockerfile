@@ -30,6 +30,7 @@ COPY --from=build-env /go/src/github.com/aerius-labs/scalerize/build/scalerized 
 COPY --from=build-env /go/src/github.com/aerius-labs/scalerize/example-testnet example-testnet
 COPY --from=build-env /go/src/github.com/aerius-labs/scalerize/start-testnet-node.sh start-testnet-node.sh
 COPY --from=build-env /go/src/github.com/aerius-labs/scalerize/testing/files/jwt.hex jwt.hex
+COPY --from=build-env /go/src/github.com/aerius-labs/scalerize/scripts/init.sh ./init.sh
 
 # Run scalerized by default
 CMD ["scalerized"]

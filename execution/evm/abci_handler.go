@@ -14,6 +14,7 @@ import (
 
 func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
+		fmt.Println("PREPARE PROPOSAL")
 		// store := c.app.CommitMultiStore().GetKVStore(storetypes.NewKVStoreKey("hashed_accounts"))
 		// iterator := store.Iterator(nil, nil) // This will iterate over all keys
 		// defer iterator.Close()
@@ -119,6 +120,7 @@ func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 
 func (c *EVMClient) ProcessProposal() sdk.ProcessProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
+		fmt.Println("PROCESS PROPOSAL")
 		// Once you receive the prepare proposal response make a new payload request to the EVM.
 		var (
 			executableData = &ExecutableData{}
@@ -151,6 +153,41 @@ func (c *EVMClient) ProcessProposal() sdk.ProcessProposalHandler {
 
 func (c *EVMClient) PreBlock() sdk.PreBlocker {
 	return func(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
+		fmt.Println("PRE BLOCK")
+		fmt.Printf("FINALIZE BLOCK REQUEST: %+v\n", req)
+		fmt.Println("BLOCK HEIGHT: ", ctx.BlockHeight())
+		fmt.Println("LAST BLOCK HEIGHT: ", c.app.LastBlockHeight())
+
+		syncing, err := c.getSyncStatus()
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Println("SYNCING IN PREBLOCK: ", syncing)
+
+		if syncing {
+			var (
+				executableData = &ExecutableData{}
+				attributes     = &PayloadAttributes{}
+			)
+
+			if err := executableData.UnmarshalJSON(req.Txs[0]); err != nil {
+				return nil, err
+			}
+
+			if err := json.Unmarshal(req.Txs[1], attributes); err != nil {
+				return nil, err
+			}
+
+			// fmt.Printf("RECIEVED EXECUTION PAYLOAD: %+v\n", executableData)
+			// fmt.Printf("RECIEVED PAYLOAD ATTRIBUTES: %+v\n", attributes)
+
+			_, err := c.NewPayload(*executableData, []common.Hash{}, (common.Hash)(attributes.ParentBeaconBlockRoot))
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		executableData := &ExecutableData{}
 
 		if err := executableData.UnmarshalJSON(req.Txs[0]); err != nil {
@@ -181,6 +218,7 @@ func (c *EVMClient) PreBlock() sdk.PreBlocker {
 
 func (c *EVMClient) EndBlock() sdk.EndBlocker {
 	return func(ctx sdk.Context) (sdk.EndBlock, error) {
+		fmt.Println("END BLOCK")
 		return sdk.EndBlock{}, nil
 	}
 }
