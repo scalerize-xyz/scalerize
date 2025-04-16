@@ -77,7 +77,7 @@ func buildSignedJWT(s *JWTSecret) (string, error) {
 	})
 	str, err := token.SignedString(s[:])
 	if err != nil {
-		return "", errors.Newf("failed to create JWT token: %w", err)
+		return "", errors.Errorf("failed to create JWT token: %w", err)
 	}
 	return str, nil
 }

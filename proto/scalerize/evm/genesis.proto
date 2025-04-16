@@ -1,0 +1,13 @@
+syntax = "proto3";
+package scalerize.evm;
+
+import "scalerize/evm/params.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/aerius-labs/scalerize/x/evm/types";
+
+// GenesisState defines the evm module's genesis state.
+message GenesisState {
+  // params defines all the parameters of the module.
+  Params params = 2 [(gogoproto.nullable) = false];
+}

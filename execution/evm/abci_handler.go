@@ -1,7 +1,6 @@
 package evm
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -13,30 +12,23 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-type EVMABCIHandler struct {
-	ctx    context.Context
-	client *EVMClient
-}
-
-func NewEVMABCIHandler(ctx context.Context, evmClient *EVMClient) (*EVMABCIHandler, error) {
-	return &EVMABCIHandler{
-		ctx:    ctx,
-		client: evmClient,
-	}, nil
-}
-
-func (h *EVMABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
+func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
-		// todo: put retries for rpc and engine api calls
+		// the store reflects the changes made through the web server created for crud operations in multistore
+		// params := evmtypes.Params{}
+		// kvstore := ctx.KVStore(evmtypes.EVMStoreKey)
+		// bz := kvstore.Get([]byte{3})
+		// json.Unmarshal(bz, &params)
+		// fmt.Printf("PARAMS IN PREPARE PROPOSAL: %+v\n", params)
 
-		lbn, err := h.client.GetLatestBlockNumber()
+		lbn, err := c.GetLatestBlockNumber()
 		if err != nil {
 			return nil, err
 		}
 
 		fmt.Printf("LATEST BLOCK NUMBER: %v\n", lbn.Int64())
 
-		bh, err := h.client.GetBlockByNumber(lbn, false)
+		bh, err := c.GetBlockByNumber(lbn, false)
 		if err != nil {
 			return nil, err
 		}
@@ -68,20 +60,27 @@ func (h *EVMABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 			Withdrawals:           []*types.Withdrawal{},
 		}
 
-		fcres, err := h.client.ForkchoiceUpdated(state, attr)
+		fcres, err := c.ForkchoiceUpdated(state, attr)
 		if err != nil {
 			return nil, err
 		}
 
+		if fcres.PayloadID == nil {
+			return nil, fmt.Errorf("payload ID is nil")
+		}
+
 		fmt.Printf("ForkchoiceUpdated response: %+v\n", fcres)
 
-		payloadExData, err := h.client.GetPayload(*fcres.PayloadID)
+		time.Sleep(10 * time.Millisecond)
+
+		payloadExData, err := c.GetPayload(*fcres.PayloadID)
 		if err != nil {
 			return nil, err
 		}
 
 		fmt.Printf("PAYLOAD EXECUTABLE DATA: %+v\n", payloadExData)
 		fmt.Printf("EXECUTION PAYLOAD: %+v\n", payloadExData.ExecutionPayload)
+		fmt.Printf("APP HASH PREPARE PROPOSAL: %+v\n", payloadExData.ExecutionPayload.StateRoot)
 		pb, err := payloadExData.ExecutionPayload.MarshalJSON()
 		if err != nil {
 			return nil, err
@@ -98,7 +97,7 @@ func (h *EVMABCIHandler) PrepareProposal() sdk.PrepareProposalHandler {
 	}
 }
 
-func (h *EVMABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
+func (c *EVMClient) ProcessProposal() sdk.ProcessProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
 		// Once you receive the prepare proposal response make a new payload request to the EVM.
 		var (
@@ -117,7 +116,7 @@ func (h *EVMABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 		fmt.Printf("RECIEVED EXECUTION PAYLOAD: %+v\n", executableData)
 		fmt.Printf("RECIEVED PAYLOAD ATTRIBUTES: %+v\n", attributes)
 
-		res, err := h.client.NewPayload(*executableData, []common.Hash{}, (common.Hash)(attributes.ParentBeaconBlockRoot))
+		res, err := c.NewPayload(*executableData, []common.Hash{}, (common.Hash)(attributes.ParentBeaconBlockRoot))
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +129,7 @@ func (h *EVMABCIHandler) ProcessProposal() sdk.ProcessProposalHandler {
 	}
 }
 
-func (h *EVMABCIHandler) PreBlock() sdk.PreBlocker {
+func (c *EVMClient) PreBlock() sdk.PreBlocker {
 	return func(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
 		executableData := &ExecutableData{}
 
@@ -143,7 +142,7 @@ func (h *EVMABCIHandler) PreBlock() sdk.PreBlocker {
 			FinalizedBlockHash: executableData.ParentHash,
 		}
 
-		fcres, err := h.client.ForkchoiceUpdated(state, nil)
+		fcres, err := c.ForkchoiceUpdated(state, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -156,7 +155,7 @@ func (h *EVMABCIHandler) PreBlock() sdk.PreBlocker {
 	}
 }
 
-func (h *EVMABCIHandler) EndBlock() sdk.EndBlocker {
+func (c *EVMClient) EndBlock() sdk.EndBlocker {
 	return func(ctx sdk.Context) (sdk.EndBlock, error) {
 		return sdk.EndBlock{}, nil
 	}

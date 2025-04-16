@@ -5,11 +5,8 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
-	"math/big"
-	"time"
+	"sync"
 
-	"github.com/aerius-labs/scalerize/abci"
-	"github.com/aerius-labs/scalerize/execution/evm"
 	dbm "github.com/cosmos/cosmos-db"
 
 	"cosmossdk.io/core/appconfig"
@@ -56,8 +53,10 @@ var DefaultNodeHome string
 var AppConfigYAML []byte
 
 var (
-	_ runtime.AppI            = (*ScalerizeApp)(nil)
-	_ servertypes.Application = (*ScalerizeApp)(nil)
+	_                  runtime.AppI            = (*ScalerizeApp)(nil)
+	_                  servertypes.Application = (*ScalerizeApp)(nil)
+	socketPath         string
+	cometBFTRPCAddress string
 )
 
 // ScalerizeApp extends an ABCI application, but with most of its parameters exported.
@@ -79,6 +78,10 @@ type ScalerizeApp struct {
 
 	// simulation manager
 	sm *module.SimulationManager
+
+	executionTablesInfo      map[uint8]tableInfo
+	executionCacheMultistore storetypes.CacheMultiStore
+	rwMutex                  sync.RWMutex
 }
 
 func init() {
@@ -114,10 +117,10 @@ func NewScalerizeApp(
 	baseAppOptions ...func(*baseapp.BaseApp),
 ) (*ScalerizeApp, error) {
 	var (
-		app         = &ScalerizeApp{}
-		appBuilder  *runtime.AppBuilder
-		abciHandler abci.ABCIHandler
-		ctx         = context.Background()
+		app                   = &ScalerizeApp{}
+		appBuilder            *runtime.AppBuilder
+		ctx                   = context.Background()
+		ensureClientCreatedCh = make(chan bool)
 	)
 
 	if err := depinject.Inject(
@@ -141,65 +144,27 @@ func NewScalerizeApp(
 	); err != nil {
 		return nil, err
 	}
-	clientType := appOpts.Get(params.FlagExecutionClientType).(string)
-	switch clientType {
-	case evm.EVM:
-		engineAPIURL := appOpts.Get(params.FlagExecutionEngineURL).(string)
-		rpcURL := appOpts.Get(params.FlagRPCURL).(string)
-		jwtSecretPath := appOpts.Get(params.FlagExecutionEngineJWTSecretPath).(string)
-		rpcJWTRefreshInterval, err := time.ParseDuration(appOpts.Get(params.FlagRPCJWTRefreshInterval).(string))
-		if err != nil {
-			return nil, err
-		}
 
-		rpcCheckInterval, err := time.ParseDuration(appOpts.Get(params.FlagRPCCheckInterval).(string))
-		if err != nil {
-			return nil, err
-		}
+	socketPath = appOpts.Get(params.FlagSocketPath).(string)
+	cometBFTRPCAddress = appOpts.Get(params.FlagCometBFTRPCAddress).(string)
 
-		strEthChainID := appOpts.Get(params.FlagEthChainID).(string)
-		ethChainID := new(big.Int)
-		_, ok := ethChainID.SetString(strEthChainID, 0)
-		if !ok {
-			return nil, fmt.Errorf("failed to convert eth chainID to big.Int")
-		}
-
-		evmConfig, err := evm.NewEVMConfig(ethChainID, rpcJWTRefreshInterval, rpcCheckInterval, engineAPIURL, rpcURL, jwtSecretPath)
-		if err != nil {
-			return nil, err
-		}
-
-		evmClient, err := evm.NewEVMClient(ctx, evmConfig, logger)
-		if err != nil {
-			return nil, err
-		}
-		ensureClientCreatedCh := make(chan bool)
-
-		go func() {
-			if err := evmClient.Start(ctx, ensureClientCreatedCh); err != nil {
-				panic(err)
-			}
-		}()
-
-		<-ensureClientCreatedCh
-
-		if abciHandler, err = evm.NewEVMABCIHandler(ctx, evmClient); err != nil {
-			app.Logger().Error("failed to create EVM ABCI Handler")
-			return nil, err
-		}
-	default:
-		return nil, fmt.Errorf("invalid execution client type")
+	executionClient, err := app.NewClient(ctx, appOpts, logger)
+	if err != nil {
+		return nil, err
 	}
 
+	go func() {
+		if err := executionClient.Start(ctx, ensureClientCreatedCh); err != nil {
+			panic(err)
+		}
+	}()
+
 	baseAppOptions = append(baseAppOptions, func(ba *baseapp.BaseApp) {
-		ba.SetPrepareProposal(abciHandler.PrepareProposal())
-		ba.SetProcessProposal(abciHandler.ProcessProposal())
-		ba.SetPreBlocker(abciHandler.PreBlock())
-		ba.SetEndBlocker(abciHandler.EndBlock())
+		ba.SetPrepareProposal(executionClient.PrepareProposal())
+		ba.SetProcessProposal(executionClient.ProcessProposal())
+		ba.SetPreBlocker(executionClient.PreBlock())
+		ba.SetEndBlocker(executionClient.EndBlock())
 		ba.SetMempool(mempool.NoOpMempool{})
-		// ba.SetBeginBlocker(abciHandler.BeginBlocker())
-		// ba.SetExtendVoteHandler(abciHandler.ExtendVote())
-		// ba.SetVerifyVoteExtensionHandler(abciHandler.VerifyVoteExtension())
 	})
 
 	app.App = appBuilder.Build(db, traceStore, baseAppOptions...)
@@ -209,8 +174,15 @@ func NewScalerizeApp(
 		return nil, err
 	}
 
+	for _, table := range app.executionTablesInfo {
+		if err := app.RegisterStores(table.StoreKey); err != nil {
+			return nil, err
+		}
+	}
+
 	/****  Module Options ****/
 
+	fmt.Println("CHAIN ID: ", app.ChainID())
 	// create the simulation manager and define the order of the modules for deterministic simulations
 	// NOTE: this is not required apps that don't use the simulator for fuzz testing transactions
 	app.sm = module.NewSimulationManagerFromAppModules(app.ModuleManager.Modules, make(map[string]module.AppModuleSimulation, 0))
@@ -218,6 +190,14 @@ func NewScalerizeApp(
 
 	if err := app.Load(loadLatest); err != nil {
 		return nil, err
+	}
+
+	go app.StartDBRouter(appOpts.Get(params.FlagExecutionClientType).(string))
+
+	<-ensureClientCreatedCh
+
+	for _, storekey := range app.GetStoreKeys() {
+		fmt.Printf("STORE KEY: %+v\n", storekey)
 	}
 
 	return app, nil
@@ -263,3 +243,49 @@ func (app *ScalerizeApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.
 		panic(err)
 	}
 }
+
+// func GetProof(clientCtx client.Context, storeKey string, key []byte) ([]byte, *crypto.ProofOps, error) {
+// 	height := clientCtx.Height
+// 	fmt.Println("HEIGHT: ", height)
+// 	// ABCI queries at height less than or equal to 2 are not supported.
+// 	// Base app does not support queries for height less than or equal to 1.
+// 	// Therefore, a query at height 2 would be equivalent to a query at height 3
+// 	if height <= 2 {
+// 		return nil, nil, fmt.Errorf("proof queries at height <= 2 are not supported")
+// 	}
+
+// 	abciReq := abci.RequestQuery{
+// 		Path:   fmt.Sprintf("store/%s/key", storeKey),
+// 		Data:   key,
+// 		Height: height,
+// 		Prove:  true,
+// 	}
+
+// 	abciRes, err := clientCtx.QueryABCI(abciReq)
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
+
+// 	return abciRes.Value, abciRes.ProofOps, nil
+// }
+
+// func (app *ScalerizeApp) InitializeCommitMultiStore(db dbm.DB, logger log.Logger, metricGatherer metrics.StoreMetrics) error {
+// 	// Initialize the CommitMultiStore
+// 	cms := store.NewCommitMultiStore(db, logger, metricGatherer)
+
+// 	// Mount necessary stores
+// 	for _, table := range app.executionTablesInfo {
+// 		cms.MountStoreWithDB(table.StoreKey, storetypes.StoreTypeIAVL, db)
+// 	}
+
+// 	// Load the latest version
+// 	err := cms.LoadLatestVersion()
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	// Set the CommitMultiStore
+// 	app.SetCMS(cms)
+
+// 	return nil
+// }

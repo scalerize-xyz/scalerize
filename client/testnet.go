@@ -125,7 +125,7 @@ or a similar setup where each node has a manually configurable IP address.
 Note, strict routability for addresses is turned off in the config file.
 
 Example:
-	evmosd testnet init-files --v 4 --output-dir ./.testnets --starting-ip-address 192.168.10.2
+	scalerized testnet init-files --v 4 --output-dir ./.testnets --starting-ip-address 192.168.10.2
 	`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			clientCtx, err := client.GetClientQueryContext(cmd)
@@ -146,6 +146,15 @@ Example:
 			args.ipAddresses, _ = cmd.Flags().GetString(flagIPAddresses)
 			args.numValidators, _ = cmd.Flags().GetInt(flagNumValidators)
 			args.algo, _ = cmd.Flags().GetString(flags.FlagKeyAlgorithm)
+
+			if args.ipAddresses != "" {
+				ipList := strings.Split(args.ipAddresses, ",")
+				validIPs, err := validateIPAddresses(ipList, args.numValidators)
+				if err != nil {
+					return err
+				}
+				args.ipAddresses = strings.Join(validIPs, ",")
+			}
 
 			return initTestnetFiles(clientCtx, cmd, serverCtx.Config, mbm, genBalIterator, clientCtx.TxConfig.SigningContext().ValidatorAddressCodec(), args)
 		},
@@ -173,7 +182,7 @@ and generate "v" directories, populated with necessary validator configuration f
 (private validator, genesis, config, etc.).
 
 Example:
-	evmosd testnet --v 4 --output-dir ./.testnets
+	scalerized testnet --v 4 --output-dir ./.testnets
 	`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			args := startArgs{}
@@ -203,7 +212,7 @@ Example:
 	return cmd
 }
 
-const nodeDirPerm = 0o755
+const nodeDirPerm = 0o700
 
 // initTestnetFiles initializes testnet files for a testnet to be run in a separate process
 func initTestnetFiles(
@@ -540,7 +549,7 @@ func calculateIP(ip string, i int) (string, error) {
 func writeFile(name, dir string, contents []byte) error {
 	file := filepath.Join(dir, name)
 
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, nodeDirPerm); err != nil {
 		return fmt.Errorf("could not create directory %q: %w", dir, err)
 	}
 
@@ -596,4 +605,25 @@ func startTestnet(cmd *cobra.Command, args startArgs) error {
 	testnet.Cleanup()
 
 	return nil
+}
+
+func validateIPAddresses(ipList []string, numValidators int) ([]string, error) {
+	if len(ipList) != numValidators {
+		return nil, fmt.Errorf("expected %d IP addresses, got %d", numValidators, len(ipList))
+	}
+
+	validated := make([]string, 0, numValidators)
+	for _, ipStr := range ipList {
+		ipStr = strings.TrimSpace(ipStr)
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			return nil, fmt.Errorf("invalid IP address format: %q", ipStr)
+		}
+
+		if !ip.IsGlobalUnicast() {
+			return nil, fmt.Errorf("IP address %q is not a valid global unicast address", ipStr)
+		}
+		validated = append(validated, ip.String())
+	}
+	return validated, nil
 }
