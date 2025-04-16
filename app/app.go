@@ -1,9 +1,15 @@
 package app
 
 import (
+	"context"
 	_ "embed"
+	"fmt"
 	"io"
+	"math/big"
+	"time"
 
+	"github.com/aerius-labs/scalerize/abci"
+	"github.com/aerius-labs/scalerize/execution/evm"
 	dbm "github.com/cosmos/cosmos-db"
 
 	"cosmossdk.io/core/appconfig"
@@ -21,6 +27,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server/api"
 	"github.com/cosmos/cosmos-sdk/server/config"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
+	"github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
@@ -31,7 +38,8 @@ import (
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 
 	appv1alpha1 "cosmossdk.io/api/cosmos/app/v1alpha1"
-	_ "cosmossdk.io/api/cosmos/tx/config/v1"          // import for side-effects
+	_ "cosmossdk.io/api/cosmos/tx/config/v1" // import for side-effects
+	"github.com/aerius-labs/scalerize/app/params"
 	_ "github.com/cosmos/cosmos-sdk/x/auth"           // import for side-effects
 	_ "github.com/cosmos/cosmos-sdk/x/auth/tx/config" // import for side-effects
 	_ "github.com/cosmos/cosmos-sdk/x/bank"           // import for side-effects
@@ -106,8 +114,10 @@ func NewScalerizeApp(
 	baseAppOptions ...func(*baseapp.BaseApp),
 ) (*ScalerizeApp, error) {
 	var (
-		app        = &ScalerizeApp{}
-		appBuilder *runtime.AppBuilder
+		app         = &ScalerizeApp{}
+		appBuilder  *runtime.AppBuilder
+		abciHandler abci.ABCIHandler
+		ctx         = context.Background()
 	)
 
 	if err := depinject.Inject(
@@ -131,6 +141,66 @@ func NewScalerizeApp(
 	); err != nil {
 		return nil, err
 	}
+	clientType := appOpts.Get(params.FlagExecutionClientType).(string)
+	switch clientType {
+	case evm.EVM:
+		engineAPIURL := appOpts.Get(params.FlagExecutionEngineURL).(string)
+		rpcURL := appOpts.Get(params.FlagRPCURL).(string)
+		jwtSecretPath := appOpts.Get(params.FlagExecutionEngineJWTSecretPath).(string)
+		rpcJWTRefreshInterval, err := time.ParseDuration(appOpts.Get(params.FlagRPCJWTRefreshInterval).(string))
+		if err != nil {
+			return nil, err
+		}
+
+		rpcCheckInterval, err := time.ParseDuration(appOpts.Get(params.FlagRPCCheckInterval).(string))
+		if err != nil {
+			return nil, err
+		}
+
+		strEthChainID := appOpts.Get(params.FlagEthChainID).(string)
+		ethChainID := new(big.Int)
+		_, ok := ethChainID.SetString(strEthChainID, 0)
+		if !ok {
+			return nil, fmt.Errorf("failed to convert eth chainID to big.Int")
+		}
+
+		evmConfig, err := evm.NewEVMConfig(ethChainID, rpcJWTRefreshInterval, rpcCheckInterval, engineAPIURL, rpcURL, jwtSecretPath)
+		if err != nil {
+			return nil, err
+		}
+
+		evmClient, err := evm.NewEVMClient(ctx, evmConfig, logger)
+		if err != nil {
+			return nil, err
+		}
+		ensureClientCreatedCh := make(chan bool)
+
+		go func() {
+			if err := evmClient.Start(ctx, ensureClientCreatedCh); err != nil {
+				panic(err)
+			}
+		}()
+
+		<-ensureClientCreatedCh
+
+		if abciHandler, err = evm.NewEVMABCIHandler(ctx, evmClient); err != nil {
+			app.Logger().Error("failed to create EVM ABCI Handler")
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("invalid execution client type")
+	}
+
+	baseAppOptions = append(baseAppOptions, func(ba *baseapp.BaseApp) {
+		ba.SetPrepareProposal(abciHandler.PrepareProposal())
+		ba.SetProcessProposal(abciHandler.ProcessProposal())
+		ba.SetPreBlocker(abciHandler.PreBlock())
+		ba.SetEndBlocker(abciHandler.EndBlock())
+		ba.SetMempool(mempool.NoOpMempool{})
+		// ba.SetBeginBlocker(abciHandler.BeginBlocker())
+		// ba.SetExtendVoteHandler(abciHandler.ExtendVote())
+		// ba.SetVerifyVoteExtensionHandler(abciHandler.VerifyVoteExtension())
+	})
 
 	app.App = appBuilder.Build(db, traceStore, baseAppOptions...)
 

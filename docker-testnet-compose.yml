@@ -1,0 +1,164 @@
+version: "3"
+
+services:
+  scalerizednode0:
+    container_name: scalerizednode0
+    image: "scalerized/node"
+    ports:
+      - "26657:26657"
+      - "8544:8545"
+      - "8543:8546"
+      - "8125:8125"
+    environment:
+      - ID=0
+      - LOG=${LOG:-scalerized.log}
+      - ENGINE_API=http://172.20.0.6:8551
+      - RPC_API=http://172.20.0.6:8545
+    volumes:
+      - ./localnet-setup/node0/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.2
+
+    entrypoint: "bash start-testnet-node.sh"
+
+  scalerizednode1:
+    container_name: scalerizednode1
+    image: "scalerized/node"
+    ports:
+      - "26658:26657"
+      - "8555:8545"
+      - "8556:8546"
+      - "8126:8125"
+    environment:
+      - ID=1
+      - LOG=${LOG:-scalerized.log}
+      - ENGINE_API=http://172.20.0.7:8551
+      - RPC_API=http://172.20.0.7:8545
+
+    volumes:
+      - ./localnet-setup/node1/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.3
+
+    entrypoint: "bash start-testnet-node.sh"
+
+  scalerizednode2:
+    container_name: scalerizednode2
+    image: "scalerized/node"
+    environment:
+      - ID=2
+      - LOG=${LOG:-scalerized.log}
+      - ENGINE_API=http://172.20.0.8:8551
+      - RPC_API=http://172.20.0.8:8545
+
+    ports:
+      - "26659:26657"
+      - "8565:8545"
+      - "8566:8546"
+      - "8127:8125"
+    volumes:
+      - ./localnet-setup/node2/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.4
+    entrypoint: "bash start-testnet-node.sh"
+
+  scalerizednode3:
+    container_name: scalerizednode3
+    image: "scalerized/node"
+    environment:
+      - ID=3
+      - LOG=${LOG:-scalerized.log}
+      - ENGINE_API=http://172.20.0.9:8551
+      - RPC_API=http://172.20.0.9:8545
+
+    ports:
+      - "26660:26657"
+      - "8575:8545"
+      - "8576:8546"
+      - "8128:8125"
+    volumes:
+      - ./localnet-setup/node3/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.5
+    entrypoint: "bash start-testnet-node.sh"
+
+  reth-bootnode:
+    container_name: reth-bootnode
+    image: "reth/node"  
+    ports:
+      - "8551:8551"
+      - "8545:8545"
+      - "30303:30303"
+    env_file: "reth.env"
+    volumes:
+      - ./localnet-setup/node0/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.6
+    entrypoint: ["/bin/sh", "-c", "bash start-testnet-reth-bootnode.sh"]
+
+  rethnode0:
+    container_name: rethnode0
+    image: "reth/node"
+    environment:
+      - BOOTNODE_IP=172.20.0.6
+      - BOOTNODE_RPC_PORT=8545
+
+    ports:
+      - "8552:8551"
+      - "8546:8545"
+      - "30304:30303"
+    env_file: "reth.env"
+    volumes:
+      - ./localnet-setup/node0/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.7
+    entrypoint: ["/bin/sh", "-c", "bash start-testnet-reth-miner-node.sh"]
+
+  rethnode1:
+    container_name: rethnode1
+    image: "reth/node"
+    environment:
+      - BOOTNODE_IP=172.20.0.6
+      - BOOTNODE_RPC_PORT=8545
+    ports:
+      - "8553:8551"
+      - "8547:8545"
+      - "30305:30303"
+    env_file: "reth.env"
+    volumes:
+      - ./localnet-setup/node0/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.8
+    entrypoint: ["/bin/sh", "-c", "bash start-testnet-reth-miner-node.sh"]
+
+  rethnode2:
+    container_name: rethnode2
+    image: "reth/node"
+    environment:
+      - BOOTNODE_IP=172.20.0.6
+      - BOOTNODE_RPC_PORT=8545
+    ports:
+      - "8554:8551"
+      - "8548:8545"
+      - "30306:30303"
+    env_file: "reth.env"
+    volumes:
+      - ./localnet-setup/node0/scalerized:/scalerize:Z
+    networks:
+      scalerize-net:
+        ipv4_address: 172.20.0.9
+    entrypoint: ["/bin/sh", "-c", "bash start-testnet-reth-miner-node.sh"]
+
+networks:
+  scalerize-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

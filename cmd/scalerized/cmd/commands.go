@@ -11,6 +11,10 @@ import (
 	"cosmossdk.io/log"
 	confixcmd "cosmossdk.io/tools/confix/cmd"
 
+	"github.com/aerius-labs/scalerize/app"
+	"github.com/aerius-labs/scalerize/app/params"
+	sclient "github.com/aerius-labs/scalerize/client"
+	"github.com/aerius-labs/scalerize/execution/evm"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/debug"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -23,9 +27,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	genutilcli "github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
-
-	"github.com/aerius-labs/scalerize/app"
 )
 
 func initRootCmd(rootCmd *cobra.Command, txConfig client.TxConfig, basicManager module.BasicManager) {
@@ -40,12 +43,21 @@ func initRootCmd(rootCmd *cobra.Command, txConfig client.TxConfig, basicManager 
 		snapshot.Cmd(newApp),
 	)
 
-	server.AddCommands(rootCmd, app.DefaultNodeHome, newApp, appExport, func(startCmd *cobra.Command) {})
+	server.AddCommands(rootCmd, app.DefaultNodeHome, newApp, appExport, func(startCmd *cobra.Command) {
+		startCmd.PersistentFlags().String(params.FlagExecutionClientType, evm.EVM, "Specifies the execution client type (e.g., EVM, SVM, etc.)")
+		startCmd.PersistentFlags().String(params.FlagExecutionEngineURL, evm.DefaultEngineAPIURL, "URL for the Ethereum execution engine API")
+		startCmd.PersistentFlags().String(params.FlagRPCURL, evm.DefaultRPCURL, "URL for Ethereum RPC calls")
+		startCmd.PersistentFlags().String(params.FlagExecutionEngineJWTSecretPath, evm.DefaultJWTSecretPath, "Path to a JWT secret to use for the authenticated engine-API RPC server")
+		startCmd.PersistentFlags().String(params.FlagRPCCheckInterval, evm.DefaultRPCCheckInterval.String(), "Ethereum RPC server startup check interval")
+		startCmd.PersistentFlags().String(params.FlagRPCJWTRefreshInterval, evm.DefaultRPCJWTRefreshInterval.String(), "Ethereum execution engine API jwt refresh interval")
+		startCmd.PersistentFlags().String(params.FlagEthChainID, evm.DefaultEthChainID, "Ethereum execution client chain id")
+	})
 
 	// add keybase, auxiliary RPC, query, genesis, and tx child commands
 	rootCmd.AddCommand(
 		server.StatusCommand(),
 		genutilcli.Commands(txConfig, basicManager, app.DefaultNodeHome),
+		sclient.NewTestnetCmd(basicManager, banktypes.GenesisBalancesIterator{}),
 		queryCommand(),
 		txCommand(),
 		keys.Commands(),

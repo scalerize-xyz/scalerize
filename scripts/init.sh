@@ -24,3 +24,4 @@ $SCALERIZED_BIN genesis add-genesis-account bob 1000scalerize --keyring-backend 
 # create default validator
 $SCALERIZED_BIN genesis gentx alice 1000000scalerize --chain-id demo
 $SCALERIZED_BIN genesis collect-gentxs
+$SCALERIZED_BIN config set config mempool.type "nop" --skip-validate
