@@ -35,16 +35,10 @@ func (app *ScalerizeApp) StartDBRouter(clientType string) {
 	app.Logger().Info("Listening on: ", dbSocketPath)
 
 	for {
-		// fmt.Println("CONNECTING TO UNIX SOCKET SERVER FOR DB")
 		conn, err := l.Accept()
 		if err != nil {
-			// app.Logger().Error("Error accepting connection to Scalerize DB Router: ", err)
 			continue
 		}
-
-		// app.Logger().Info("New client connected to Scalerize Database Router")
-
-		// fmt.Println("New client connected to Scalerize Database Router")
 
 		go hConn(conn)
 	}

@@ -70,16 +70,10 @@ func createCosmosClient(cometBFTClient *http.HTTP) (cosmossdkclient.Context, err
 // will populate key in StorageResult, balance, codeHash and none in AccountResult on reth side
 // need to send the bincode serialized hashed address and hashed storageKeys
 func getProof(cometBFTClient *http.HTTP, serializedHashedAccountAddress []byte, serializedStorageKeys [][]byte, blockNumOrHash *BlockNumberOrHash) (*AccountResult, error) {
-	fmt.Println("serializedHashedAccountAddress: ", serializedHashedAccountAddress)
-	fmt.Println("serializedHashedStorageKeys: ", serializedStorageKeys)
-	fmt.Printf("blockNumOrHash: %+v\n", blockNumOrHash)
-
 	blockNumber, err := blockNumberFromTendermint(cometBFTClient, *blockNumOrHash)
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Println("PROOF BLOCK NUMBER: ", blockNumber)
 
 	// query storage proofs
 	storageProofs := make([]StorageResult, len(serializedStorageKeys))
@@ -92,15 +86,11 @@ func getProof(cometBFTClient *http.HTTP, serializedHashedAccountAddress []byte, 
 	cosmosClient = cosmosClient.WithHeight(blockNumber)
 
 	for i, key := range serializedStorageKeys {
-		// hexKey := common.HexToHash(key)
 		valueBz, proof, err := getProofForKey(cosmosClient, HashedStoragesStoreName, append(serializedHashedAccountAddress, key...))
 		if err != nil {
 			return nil, err
 		}
 
-		fmt.Println("STORAGE PROOF VAL BYTES: ", valueBz)
-
-		fmt.Println("HEX STRING", hex.EncodeToString(key))
 		storageProofs[i] = StorageResult{
 			Key:   hex.EncodeToString(key[8:]),
 			Value: uint256.NewInt(0).SetBytes(valueBz),
@@ -109,13 +99,10 @@ func getProof(cometBFTClient *http.HTTP, serializedHashedAccountAddress []byte, 
 	}
 
 	// query account proofs
-	// hashedAccountAddress := gethcrypto.Keccak256Hash(address)
-	accountVal, proof, err := getProofForKey(cosmosClient, HashedAccountsStoreName, serializedHashedAccountAddress)
+	_, proof, err := getProofForKey(cosmosClient, HashedAccountsStoreName, serializedHashedAccountAddress)
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Println("ACCOUNT PROOF VAL BYTES: ", accountVal)
 
 	return &AccountResult{
 		Address:      common.Address{},
@@ -163,8 +150,6 @@ func getProofForKey(clientCtx cosmossdkclient.Context, storeKey string, key []by
 	if err != nil {
 		return nil, nil, err
 	}
-
-	// fmt.Printf("PROOF RESPONSE: %+v\n", abciRes)
 
 	return abciRes.Value, abciRes.ProofOps, nil
 }

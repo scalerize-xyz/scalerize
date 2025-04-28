@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	_ "embed"
-	"fmt"
 	"io"
 	"sync"
 
@@ -184,7 +183,6 @@ func NewScalerizeApp(
 
 	/****  Module Options ****/
 
-	fmt.Println("CHAIN ID: ", app.ChainID())
 	// create the simulation manager and define the order of the modules for deterministic simulations
 	// NOTE: this is not required apps that don't use the simulator for fuzz testing transactions
 	app.sm = module.NewSimulationManagerFromAppModules(app.ModuleManager.Modules, make(map[string]module.AppModuleSimulation, 0))
@@ -201,45 +199,8 @@ func NewScalerizeApp(
 	go app.StartDBRouter(clientType)
 	go app.StartStateRouter(clientType)
 	go executionClient.SetCosmosRPCClient(cometBFTRPCAddress)
-	// go func() {
-	// 	time.Sleep(10 * time.Second)
-	// 	if err := app.StartSyncMonitor(1 * time.Second); err != nil {
-	// 		panic(err)
-	// 	}
-	// }()
-	// go func() {
-	// 	time.Sleep(20 * time.Second)
-	// 	c := app.CommitMultiStore().CacheMultiStore()
-	// 	c.GetKVStore(app.executionTablesInfo[0].StoreKey).Set([]byte{3}, []byte{3})
-	// 	fmt.Println("GET 2 from cachemultistore", c.GetKVStore(app.executionTablesInfo[0].StoreKey).Get([]byte{3}))
-	// 	c.Write()
-	// 	fmt.Println("GET 2 from commitmultistore", app.CommitMultiStore().CacheMultiStore().GetKVStore(app.executionTablesInfo[0].StoreKey).Get([]byte{3}))
-	// 	// fmt.Println("----------------------------", app.CommitMultiStore().GetKVStore(app.executionTablesInfo[0].StoreKey).Get([]byte{
-	// 	// 	32, 0, 0, 0, 0, 0, 0, 0, 254, 212, 140, 188, 17, 169, 63, 100,
-	// 	// 	69, 192, 211, 41, 51, 101, 89, 199, 60, 113, 120, 2, 184, 8, 7, 223,
-	// 	// 	184, 19, 202, 193, 34, 143, 25, 137,
-	// 	// }))
-
-	// 	// store := app.CommitMultiStore().GetKVStore(app.executionTablesInfo[0].StoreKey)
-	// 	// iterator := store.Iterator(nil, nil) // This will iterate over all keys
-	// 	// defer iterator.Close()
-
-	// 	// fmt.Println("All data in store:", app.executionTablesInfo[0].StoreKey.Name())
-	// 	// for ; iterator.Valid(); iterator.Next() {
-	// 	// 	key := iterator.Key()
-	// 	// 	value := iterator.Value()
-	// 	// 	fmt.Printf("Key: %x, Value: %x\n", key, value)
-	// 	// 	// For more readable output if your data is UTF-8 strings:
-	// 	// 	// fmt.Printf("Key: %s, Value: %s\n", string(key), string(value))
-	// 	// }
-
-	// }()
 
 	<-ensureClientCreatedCh
-
-	// for _, storekey := range app.GetStoreKeys() {
-	// 	fmt.Printf("STORE KEY: %+v\n", storekey)
-	// }
 
 	return app, nil
 }
@@ -284,99 +245,3 @@ func (app *ScalerizeApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.
 		panic(err)
 	}
 }
-
-// func (app *ScalerizeApp) FinalizeBlock(req *types.RequestFinalizeBlock) (*types.ResponseFinalizeBlock, error) {
-// 	fmt.Println("THIS FINALIZE BLOCK")
-// 	fmt.Println("WORKING HASH BEFORE FINALIZE BLOCK: ", app.CommitMultiStore().WorkingHash())
-// 	resp, err := app.BaseApp.FinalizeBlock(req)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	// syncing, err := app.executionClient.SyncingStatus()
-// 	// if err != nil {
-// 	// 	return nil, err
-// 	// }
-
-// 	// fmt.Println("SYNCING IN FINALIZE BLOCK: ", syncing)
-// 	fmt.Println("WORKING HASH AFTER FINALIZE BLOCK: ", app.CommitMultiStore().WorkingHash())
-
-// 	return resp, nil
-// }
-
-// func (app *ScalerizeApp) StartSyncMonitor(checkInterval time.Duration) error {
-// 	cometbftClient, err := createCometBFTClient(cometBFTRPCAddress)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	cosmosSDKClient, err := createCosmosClient(cometbftClient)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	for {
-// 		fmt.Println("*******************")
-// 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-// 		status, err := cosmosSDKClient.Client.Status(ctx)
-// 		fmt.Println("SYNCING STATUS: ", status.SyncInfo.CatchingUp)
-// 		cancel()
-
-// 		if err == nil {
-// 			fmt.Println("SYNCING STATUS: ", status.SyncInfo.CatchingUp)
-// 			app.Logger().Info("Updated sync status",
-// 				"catching_up", status.SyncInfo.CatchingUp,
-// 				"latest_block_height", status.SyncInfo.LatestBlockHeight)
-// 		} else {
-// 			app.Logger().Error("Failed to get node status", "error", err)
-// 		}
-
-// 		time.Sleep(checkInterval)
-// 	}
-// }
-
-// func GetProof(clientCtx client.Context, storeKey string, key []byte) ([]byte, *crypto.ProofOps, error) {
-// 	height := clientCtx.Height
-// 	fmt.Println("HEIGHT: ", height)
-// 	// ABCI queries at height less than or equal to 2 are not supported.
-// 	// Base app does not support queries for height less than or equal to 1.
-// 	// Therefore, a query at height 2 would be equivalent to a query at height 3
-// 	if height <= 2 {
-// 		return nil, nil, fmt.Errorf("proof queries at height <= 2 are not supported")
-// 	}
-
-// 	abciReq := abci.RequestQuery{
-// 		Path:   fmt.Sprintf("store/%s/key", storeKey),
-// 		Data:   key,
-// 		Height: height,
-// 		Prove:  true,
-// 	}
-
-// 	abciRes, err := clientCtx.QueryABCI(abciReq)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-
-// 	return abciRes.Value, abciRes.ProofOps, nil
-// }
-
-// func (app *ScalerizeApp) InitializeCommitMultiStore(db dbm.DB, logger log.Logger, metricGatherer metrics.StoreMetrics) error {
-// 	// Initialize the CommitMultiStore
-// 	cms := store.NewCommitMultiStore(db, logger, metricGatherer)
-
-// 	// Mount necessary stores
-// 	for _, table := range app.executionTablesInfo {
-// 		cms.MountStoreWithDB(table.StoreKey, storetypes.StoreTypeIAVL, db)
-// 	}
-
-// 	// Load the latest version
-// 	err := cms.LoadLatestVersion()
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	// Set the CommitMultiStore
-// 	app.SetCMS(cms)
-
-// 	return nil
-// }

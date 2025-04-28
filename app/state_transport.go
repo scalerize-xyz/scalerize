@@ -14,8 +14,6 @@ func (app *ScalerizeApp) StartStateRouter(clientType string) {
 
 	os.Remove(stateSocketPath)
 
-	// app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
-
 	switch clientType {
 	case evmexec.EVM:
 		hConn = app.ethHandleStateConnection
@@ -36,7 +34,6 @@ func (app *ScalerizeApp) StartStateRouter(clientType string) {
 	app.Logger().Info("Listening on: ", stateSocketPath)
 
 	for {
-		fmt.Println("CONNECTING TO UNIX SOCKET SERVER FOR STATE QUERIES")
 		conn, err := l.Accept()
 		if err != nil {
 			app.Logger().Error("Error accepting connection to Scalerize State Router: ", err)
@@ -44,8 +41,6 @@ func (app *ScalerizeApp) StartStateRouter(clientType string) {
 		}
 
 		app.Logger().Info("New client connected to Scalerize State Router")
-
-		fmt.Println("New client connected to Scalerize State Router")
 
 		go hConn(conn)
 	}

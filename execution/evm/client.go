@@ -79,18 +79,13 @@ func (client *EVMClient) SetCosmosRPCClient(cometBFTRPCAddress string) {
 				WithInterfaceRegistry(interfaceRegistry)
 
 			client.cosmosRPCClient = clientCtx.Client
-			fmt.Println("COSMOS RPC CLIENT CONNECTED WITH RETRIES ", i)
-
-			syncing, _ := client.SyncingStatus()
-
-			fmt.Println("SYNCING IN SET: ", syncing)
 			return
 		}
 
 		time.Sleep(retryDelay)
 	}
 
-	fmt.Println("FAILED TO CONNECT TO COMSOS RPC CLIENT")
+	client.logger.Error("FAILED TO CONNECT TO COMSOS RPC CLIENT")
 }
 
 func (c *EVMClient) Start(ctx context.Context, ensureClientCreatedCh chan bool) error {
