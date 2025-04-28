@@ -7,7 +7,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/cometbft/cometbft/abci/types"
 	dbm "github.com/cosmos/cosmos-db"
 
 	"cosmossdk.io/core/appconfig"
@@ -238,9 +237,9 @@ func NewScalerizeApp(
 
 	<-ensureClientCreatedCh
 
-	for _, storekey := range app.GetStoreKeys() {
-		fmt.Printf("STORE KEY: %+v\n", storekey)
-	}
+	// for _, storekey := range app.GetStoreKeys() {
+	// 	fmt.Printf("STORE KEY: %+v\n", storekey)
+	// }
 
 	return app, nil
 }
@@ -286,15 +285,24 @@ func (app *ScalerizeApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.
 	}
 }
 
-func (app *ScalerizeApp) FinalizeBlock(req *types.RequestFinalizeBlock) (*types.ResponseFinalizeBlock, error) {
-	fmt.Println("THIS FINALIZE BLOCK")
-	resp, err := app.BaseApp.FinalizeBlock(req)
-	if err != nil {
-		return nil, err
-	}
+// func (app *ScalerizeApp) FinalizeBlock(req *types.RequestFinalizeBlock) (*types.ResponseFinalizeBlock, error) {
+// 	fmt.Println("THIS FINALIZE BLOCK")
+// 	fmt.Println("WORKING HASH BEFORE FINALIZE BLOCK: ", app.CommitMultiStore().WorkingHash())
+// 	resp, err := app.BaseApp.FinalizeBlock(req)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	return resp, nil
-}
+// 	// syncing, err := app.executionClient.SyncingStatus()
+// 	// if err != nil {
+// 	// 	return nil, err
+// 	// }
+
+// 	// fmt.Println("SYNCING IN FINALIZE BLOCK: ", syncing)
+// 	fmt.Println("WORKING HASH AFTER FINALIZE BLOCK: ", app.CommitMultiStore().WorkingHash())
+
+// 	return resp, nil
+// }
 
 // func (app *ScalerizeApp) StartSyncMonitor(checkInterval time.Duration) error {
 // 	cometbftClient, err := createCometBFTClient(cometBFTRPCAddress)

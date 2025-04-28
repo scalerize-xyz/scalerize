@@ -14,7 +14,7 @@ func (app *ScalerizeApp) StartStateRouter(clientType string) {
 
 	os.Remove(stateSocketPath)
 
-	app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
+	// app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
 
 	switch clientType {
 	case evmexec.EVM:

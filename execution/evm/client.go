@@ -24,6 +24,10 @@ const (
 	rpcClient    = "rpc-client"
 )
 
+type SyncStatus struct {
+	syncing bool
+}
+
 type EVMClient struct {
 	ctx             context.Context
 	app             *baseapp.BaseApp
@@ -32,6 +36,7 @@ type EVMClient struct {
 	rpcClient       *ethclient.Client
 	cosmosRPCClient cosmossdkclient.CometRPC
 	logger          log.Logger
+	syncStatus      *SyncStatus
 }
 
 func NewEVMClient(ctx context.Context, cfg *EVMConfig, logger log.Logger) (*EVMClient, error) {
@@ -50,6 +55,15 @@ func (client *EVMClient) SetApp(app *baseapp.BaseApp) {
 	client.app = app
 }
 
+func (evmClient *EVMClient) SyncingStatus() (bool, error) {
+	status, err := evmClient.cosmosRPCClient.Status(context.Background())
+	if err != nil {
+		return false, err
+	}
+
+	return status.SyncInfo.CatchingUp, nil
+}
+
 func (client *EVMClient) SetCosmosRPCClient(cometBFTRPCAddress string) {
 	maxRetries := 10
 	retryDelay := 1 * time.Second
@@ -66,6 +80,10 @@ func (client *EVMClient) SetCosmosRPCClient(cometBFTRPCAddress string) {
 
 			client.cosmosRPCClient = clientCtx.Client
 			fmt.Println("COSMOS RPC CLIENT CONNECTED WITH RETRIES ", i)
+
+			syncing, _ := client.SyncingStatus()
+
+			fmt.Println("SYNCING IN SET: ", syncing)
 			return
 		}
 

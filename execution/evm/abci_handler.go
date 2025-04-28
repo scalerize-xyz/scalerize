@@ -2,7 +2,6 @@ package evm
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -14,7 +13,12 @@ import (
 
 func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
-		fmt.Println("PREPARE PROPOSAL")
+		// fmt.Println("PREPARE PROPOSAL")
+		// fmt.Println("PREPARE PROPOSAL LAST COMM", c.app.CommitMultiStore().LastCommitID().Hash)
+		if c.syncStatus == nil {
+			c.syncStatus = &SyncStatus{syncing: false}
+		}
+
 		// store := c.app.CommitMultiStore().GetKVStore(storetypes.NewKVStoreKey("hashed_accounts"))
 		// iterator := store.Iterator(nil, nil) // This will iterate over all keys
 		// defer iterator.Close()
@@ -99,8 +103,8 @@ func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 			return nil, err
 		}
 
-		fmt.Printf("PAYLOAD EXECUTABLE DATA: %+v\n", payloadExData)
-		fmt.Printf("EXECUTION PAYLOAD: %+v\n", payloadExData.ExecutionPayload)
+		// fmt.Printf("PAYLOAD EXECUTABLE DATA: %+v\n", payloadExData)
+		// fmt.Printf("EXECUTION PAYLOAD: %+v\n", payloadExData.ExecutionPayload)
 		// fmt.Printf("APP HASH PREPARE PROPOSAL: %+v\n", payloadExData.ExecutionPayload.StateRoot)
 		pb, err := payloadExData.ExecutionPayload.MarshalJSON()
 		if err != nil {
@@ -120,7 +124,11 @@ func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 
 func (c *EVMClient) ProcessProposal() sdk.ProcessProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
-		fmt.Println("PROCESS PROPOSAL")
+		// fmt.Println("PROCESS PROPOSAL")
+		if c.syncStatus == nil {
+			c.syncStatus = &SyncStatus{syncing: false}
+		}
+
 		// Once you receive the prepare proposal response make a new payload request to the EVM.
 		var (
 			executableData = &ExecutableData{}
@@ -153,19 +161,23 @@ func (c *EVMClient) ProcessProposal() sdk.ProcessProposalHandler {
 
 func (c *EVMClient) PreBlock() sdk.PreBlocker {
 	return func(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
-		fmt.Println("PRE BLOCK")
-		fmt.Printf("FINALIZE BLOCK REQUEST: %+v\n", req)
-		fmt.Println("BLOCK HEIGHT: ", ctx.BlockHeight())
-		fmt.Println("LAST BLOCK HEIGHT: ", c.app.LastBlockHeight())
+		// fmt.Println("PRE BLOCK")
+		// fmt.Printf("FINALIZE BLOCK REQUEST: %+v\n", req)
+		// fmt.Println("BLOCK HEIGHT: ", ctx.BlockHeight())
+		// fmt.Println("LAST BLOCK HEIGHT: ", c.app.LastBlockHeight())
 
-		syncing, err := c.getSyncStatus()
-		if err != nil {
-			return nil, err
+		if c.syncStatus == nil {
+			syncing, err := c.getSyncStatus()
+			if err != nil {
+				return nil, err
+			}
+
+			c.syncStatus = &SyncStatus{syncing: syncing}
+			// fmt.Println("SYNCING IN PREBLOCK: ", c.syncStatus.syncing)
 		}
 
-		fmt.Println("SYNCING IN PREBLOCK: ", syncing)
-
-		if syncing {
+		if c.syncStatus.syncing {
+			// time.Sleep(10 * time.Millisecond)
 			var (
 				executableData = &ExecutableData{}
 				attributes     = &PayloadAttributes{}
@@ -187,7 +199,6 @@ func (c *EVMClient) PreBlock() sdk.PreBlocker {
 				return nil, err
 			}
 		}
-
 		executableData := &ExecutableData{}
 
 		if err := executableData.UnmarshalJSON(req.Txs[0]); err != nil {
@@ -199,12 +210,12 @@ func (c *EVMClient) PreBlock() sdk.PreBlocker {
 			FinalizedBlockHash: executableData.ParentHash,
 		}
 
-		fcres, err := c.ForkchoiceUpdated(state, nil)
+		_, err := c.ForkchoiceUpdated(state, nil)
 		if err != nil {
 			return nil, err
 		}
 
-		fmt.Printf("PRE BLOCK ForkchoiceUpdated response: %+v\n", fcres)
+		// fmt.Printf("PRE BLOCK ForkchoiceUpdated response: %+v\n", fcres)
 
 		EthIteratorsCurrentKeyLock.Lock()
 		defer EthIteratorsCurrentKeyLock.Unlock()
@@ -218,7 +229,7 @@ func (c *EVMClient) PreBlock() sdk.PreBlocker {
 
 func (c *EVMClient) EndBlock() sdk.EndBlocker {
 	return func(ctx sdk.Context) (sdk.EndBlock, error) {
-		fmt.Println("END BLOCK")
+		// fmt.Println("END BLOCK")
 		return sdk.EndBlock{}, nil
 	}
 }

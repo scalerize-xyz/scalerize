@@ -164,7 +164,7 @@ func getProofForKey(clientCtx cosmossdkclient.Context, storeKey string, key []by
 		return nil, nil, err
 	}
 
-	fmt.Printf("PROOF RESPONSE: %+v\n", abciRes)
+	// fmt.Printf("PROOF RESPONSE: %+v\n", abciRes)
 
 	return abciRes.Value, abciRes.ProofOps, nil
 }

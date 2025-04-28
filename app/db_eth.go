@@ -2,7 +2,6 @@ package app
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net"
 
@@ -309,8 +308,8 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 				key = data[2+evm.CursorIDBytes : 2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes]
 				value = data[2+evm.CursorIDBytes+table.KeyBytes+table.SubKeyBytes:]
 
-				fmt.Printf("KEY STORAGE: %v\n", key)
-				fmt.Printf("VALUE STORAGE: %v\n", value)
+				// fmt.Printf("KEY STORAGE: %v\n", key)
+				// fmt.Printf("VALUE STORAGE: %v\n", value)
 			} else {
 				if len(data) <= 2+table.KeyBytes {
 					response = append([]byte{STATUS_ERROR}, []byte(ErrInvalidRequestData.Error())...)
@@ -624,35 +623,35 @@ func (app *ScalerizeApp) Write() {
 	app.rwMutex.Lock()
 	defer app.rwMutex.Unlock()
 
-	fmt.Println("WORKING HASH BEFORE: ", app.CommitMultiStore().WorkingHash())
+	// fmt.Println("WORKING HASH BEFORE: ", app.CommitMultiStore().WorkingHash())
 	// fmt.Println("BEFORE WRITE: ", app.CommitMultiStore().WorkingHash())
 	// fmt.Println("LAST COMMIT APP HASH BEFORE WRITE: ", app.CommitMultiStore().LastCommitID().Hash)
 	// fmt.Println("CURRENT COMMIT APP HASH BEFORE WRITE: ", app.CommitMultiStore().Commit().Hash)
 	app.executionCacheMultistore.Write()
 
-	fmt.Println("WORKING HASH AFTER: ", app.CommitMultiStore().WorkingHash())
+	// fmt.Println("WORKING HASH AFTER: ", app.CommitMultiStore().WorkingHash())
 
 	// accountbytes := make(map[[40]byte][]byte)
-	accounts := [][]byte{}
-	store := app.executionCacheMultistore.GetKVStore(app.executionTablesInfo[0].StoreKey)
-	iterator := store.Iterator(nil, nil) // This will iterate over all keys
-	defer iterator.Close()
+	// accounts := [][]byte{}
+	// store := app.executionCacheMultistore.GetKVStore(app.executionTablesInfo[0].StoreKey)
+	// iterator := store.Iterator(nil, nil) // This will iterate over all keys
+	// defer iterator.Close()
 
-	fmt.Println("All data in store:", app.executionTablesInfo[0].StoreKey.Name())
-	for ; iterator.Valid(); iterator.Next() {
-		// key := iterator.Key()
-		// value := iterator.Value()
-		// var fixedKey [40]byte
-		// copy(fixedKey[:], key)
-		// accountbytes[fixedKey] = value
-		accounts = append(accounts, iterator.Key())
-		// fmt.Printf("Key: %x, Value: %x\n", key, value)
-		// accounts++
-		// For more readable output if your data is UTF-8 strings:
-		// fmt.Printf("Key: %s, Value: %s\n", string(key), string(value))
-	}
+	// fmt.Println("All data in store:", app.executionTablesInfo[0].StoreKey.Name())
+	// for ; iterator.Valid(); iterator.Next() {
+	// 	// key := iterator.Key()
+	// 	// value := iterator.Value()
+	// 	// var fixedKey [40]byte
+	// 	// copy(fixedKey[:], key)
+	// 	// accountbytes[fixedKey] = value
+	// 	accounts = append(accounts, iterator.Key())
+	// 	// fmt.Printf("Key: %x, Value: %x\n", key, value)
+	// 	// accounts++
+	// 	// For more readable output if your data is UTF-8 strings:
+	// 	// fmt.Printf("Key: %s, Value: %s\n", string(key), string(value))
+	// }
 
-	fmt.Println("ACCOUNTS: ", len(accounts))
+	// fmt.Println("ACCOUNTS: ", len(accounts))
 	// fmt.Println(accounts)
 	// var storageSlots int
 	// store = app.executionCacheMultistore.GetKVStore(app.executionTablesInfo[1].StoreKey)
@@ -675,7 +674,7 @@ func (app *ScalerizeApp) Write() {
 
 	app.executionCacheMultistore = app.CommitMultiStore().CacheMultiStore()
 
-	fmt.Println("CURSOR LEN:", len(evm.EthIteratorsCurrentKey))
+	// fmt.Println("CURSOR LEN:", len(evm.EthIteratorsCurrentKey))
 	// evm.EthIteratorsCurrentKeyLock.Lock()
 	// defer evm.EthIteratorsCurrentKeyLock.Unlock()
 	// delete(evm.EthIteratorsCurrentKey, cursorID)
@@ -930,8 +929,8 @@ func (app *ScalerizeApp) Current(tableCode uint8, cursorID [8]byte) ([]byte, err
 func (app *ScalerizeApp) Upsert(tableCode uint8, cursorID [8]byte, key, value []byte) error {
 	// fmt.Println("ITERATOR POSITION BEFORE UPSERT: ", evm.EthIteratorsCurrentKey[cursorID])
 
-	fmt.Println("UPSERT KEY: ", key)
-	fmt.Println("UPSERT VALUE: ", value)
+	// fmt.Println("UPSERT KEY: ", key)
+	// fmt.Println("UPSERT VALUE: ", value)
 	if err := app.Put(tableCode, key, value); err != nil {
 		return err
 	}
