@@ -1,4 +1,4 @@
-# !/bin/sh
+#!/bin/sh
 
 # Copy the folder based on ID environment variable
 sudo cp -r ./example-testnet/node$ID/scalerized ~/.scalerized

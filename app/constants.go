@@ -32,7 +32,7 @@ const (
 	OP_DELETE_CURRENT_DUPLICATES byte = 20
 	OP_APPEND_DUP                byte = 21
 
-	OP_DROP_CURSOR byte = 16
+	OP_DROP_CURSOR byte = 22
 )
 
 // STATE OPERATIONS

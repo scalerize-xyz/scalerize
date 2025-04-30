@@ -52,3 +52,27 @@ func NewEVMConfig(ethChainID *big.Int, rpcJWTRefreshInterval, rpcCheckInterval t
 		ethChainID:            ethChainID,
 	}, nil
 }
+
+func (c *EVMConfig) EngineAPIURL() *url.URL {
+	return c.engineAPIURL
+}
+
+func (c *EVMConfig) RPCURL() *url.URL {
+	return c.rpcURL
+}
+
+func (c *EVMConfig) JWTSecret() *JWTSecret {
+	return c.jwtSecret
+}
+
+func (c *EVMConfig) RPCJWTRefreshInterval() time.Duration {
+	return c.rpcJWTRefreshInterval
+}
+
+func (c *EVMConfig) RPCCheckInterval() time.Duration {
+	return c.rpcCheckInterval
+}
+
+func (c *EVMConfig) ETHChainID() *big.Int {
+	return c.ethChainID
+}
