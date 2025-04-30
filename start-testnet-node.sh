@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Copy the folder based on ID environment variable
-sudo cp -r ./example-testnet/node$ID/scalerized ~/.scalerized
+cp -r ./example-testnet/node$ID/scalerized ~/.scalerized
 
 # Start the scalerized node
 echo "starting scalerize node $ID in background ..."
