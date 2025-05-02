@@ -4,6 +4,8 @@ SCALERIZED_BINARY_PATH := /go/src/github.com/aerius-labs/scalerize/build/scaleri
 BUILDDIR ?= $(CURDIR)/build
 
 include scripts/execution-client.mk
+-include testnet.env
+export $(shell sed 's/=.*//' testnet.env)
 
 BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 COMMIT := $(shell git log -1 --format='%H')
@@ -57,3 +59,8 @@ init:
 
 localtestnet-example-config: 
 	$(SCALERIZED_BINARY_PATH) testnet init-files --output-dir example-testnet --v $(NODES) --starting-ip-address $(STARTING-IP-ADDR) --keyring-backend test
+
+localtestnet-config: 
+	@echo "Using NO_OF_NODES=$(NO_OF_NODES) and IP_ADDRESSES=$(IP_ADDRESSES)"
+	@set -a && . ./testnet.env && set +a && \
+	$(SCALERIZED_BINARY_PATH) testnet init-files --output-dir example-testnet --v $(NO_OF_NODES) --ip-addresses $(IP_ADDRESSES) --keyring-backend test
