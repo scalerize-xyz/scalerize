@@ -30,30 +30,6 @@ func (app *ScalerizeApp) ethHandleDatabaseConnection(conn net.Conn) {
 			return
 		}
 
-		app.CommitMultiStore().GetKVStore(app.executionTablesInfo[0].StoreKey).Set([]byte{1}, []byte{1})
-
-		// rpcEndpoint := "http://localhost:26657" // Replace with your node's RPC endpoint
-		// cometBFTClient, err := CreateCometBFTClient(rpcEndpoint)
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
-		// defer cometBFTClient.Stop() // Remember to stop the client when you're done
-
-		// // The block height you're interested in
-		// cosmosClient, err := CreateCosmosClient(cometBFTClient)
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
-
-		// res, err := cosmosClient.Client.ABCIQueryWithOptions(context.Background(), "/store/hashed_storages/key", []byte{1}, client.ABCIQueryOptions{
-		// 	Prove: true,
-		// })
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
-
-		// fmt.Printf("PROOF: %+v\n", res)
-
 		if n == 0 {
 			continue
 		}
