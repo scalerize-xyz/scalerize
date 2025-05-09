@@ -2,6 +2,7 @@ package evm
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -13,6 +14,7 @@ import (
 
 func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
+		fmt.Println("PREPARE PROPOSAL")
 		if c.syncStatus == nil {
 			c.syncStatus = &SyncStatus{syncing: false}
 		}
@@ -81,6 +83,7 @@ func (c *EVMClient) PrepareProposal() sdk.PrepareProposalHandler {
 
 func (c *EVMClient) ProcessProposal() sdk.ProcessProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
+		fmt.Println("PROCESS PROPOSAL")
 		if c.syncStatus == nil {
 			c.syncStatus = &SyncStatus{syncing: false}
 		}
@@ -112,15 +115,12 @@ func (c *EVMClient) ProcessProposal() sdk.ProcessProposalHandler {
 
 func (c *EVMClient) PreBlock() sdk.PreBlocker {
 	return func(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
+		fmt.Println("PREBLOCK")
 		if c.syncStatus == nil {
-			syncing, err := c.getSyncStatus()
-			if err != nil {
-				return nil, err
-			}
-
-			c.syncStatus = &SyncStatus{syncing: syncing}
+			c.syncStatus = &SyncStatus{syncing: true}
 		}
 
+		fmt.Printf("SYNCING: %+v\n", c.syncStatus)
 		if c.syncStatus.syncing {
 			var (
 				executableData = &ExecutableData{}
