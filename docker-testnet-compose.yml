@@ -131,7 +131,7 @@ services:
 
     ports:
       - "8552:8551"
-      - "8546:8545"
+      - "8545:8545"
       - "30304:30303"
     env_file: "reth.env"
     volumes:
