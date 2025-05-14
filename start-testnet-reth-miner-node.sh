@@ -50,3 +50,7 @@ reth node \
     --datadir $ETH_DATA_DIR \
     --trusted-peers $enode_url \
     --rpc.eth-proof-window 1209600 \
+    --ws \
+    --ws.addr '0.0.0.0' \
+    --ws.port 8545 \
+    --ws.api admin,debug,eth,net,trace,txpool,web3,rpc,reth,ots
