@@ -10,12 +10,15 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	"github.com/aerius-labs/scalerize/app/params"
 	evmexec "github.com/aerius-labs/scalerize/execution/evm"
+	"github.com/cosmos/cosmos-sdk/baseapp"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 )
 
 type ExecutionClient interface {
 	Name() string
 	Start(ctx context.Context, ready chan bool) error
+	SetApp(*baseapp.BaseApp)
+	SetCosmosRPCClient(string)
 	ABCIHandler
 }
 

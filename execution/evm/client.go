@@ -7,7 +7,13 @@ import (
 	"sync"
 	"time"
 
+	cometbfthttp "github.com/cometbft/cometbft/rpc/client/http"
+
 	"cosmossdk.io/log"
+	"github.com/cosmos/cosmos-sdk/baseapp"
+	cosmossdkclient "github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -18,12 +24,19 @@ const (
 	rpcClient    = "rpc-client"
 )
 
+type SyncStatus struct {
+	syncing bool
+}
+
 type EVMClient struct {
-	ctx          context.Context
-	config       *EVMConfig
-	engineClient *ethclient.Client
-	rpcClient    *ethclient.Client
-	logger       log.Logger
+	ctx             context.Context
+	app             *baseapp.BaseApp
+	config          *EVMConfig
+	engineClient    *ethclient.Client
+	rpcClient       *ethclient.Client
+	cosmosRPCClient cosmossdkclient.CometRPC
+	logger          log.Logger
+	syncStatus      *SyncStatus
 }
 
 func NewEVMClient(ctx context.Context, cfg *EVMConfig, logger log.Logger) (*EVMClient, error) {
@@ -36,6 +49,43 @@ func NewEVMClient(ctx context.Context, cfg *EVMConfig, logger log.Logger) (*EVMC
 
 func (client *EVMClient) Name() string {
 	return EVM
+}
+
+func (client *EVMClient) SetApp(app *baseapp.BaseApp) {
+	client.app = app
+}
+
+func (evmClient *EVMClient) SyncingStatus() (bool, error) {
+	status, err := evmClient.cosmosRPCClient.Status(context.Background())
+	if err != nil {
+		return false, err
+	}
+
+	return status.SyncInfo.CatchingUp, nil
+}
+
+func (client *EVMClient) SetCosmosRPCClient(cometBFTRPCAddress string) {
+	maxRetries := 10
+	retryDelay := 1 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		cometBFTClient, err := cometbfthttp.New(cometBFTRPCAddress, "/websocket")
+		if err == nil {
+			interfaceRegistry := types.NewInterfaceRegistry()
+			marshaler := codec.NewProtoCodec(interfaceRegistry)
+			clientCtx := cosmossdkclient.Context{}.
+				WithClient(cometBFTClient).
+				WithCodec(marshaler).
+				WithInterfaceRegistry(interfaceRegistry)
+
+			client.cosmosRPCClient = clientCtx.Client
+			return
+		}
+
+		time.Sleep(retryDelay)
+	}
+
+	client.logger.Error("FAILED TO CONNECT TO COMSOS RPC CLIENT")
 }
 
 func (c *EVMClient) Start(ctx context.Context, ensureClientCreatedCh chan bool) error {

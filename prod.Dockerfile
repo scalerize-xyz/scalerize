@@ -15,7 +15,7 @@ COPY . .
 
 # Make the binary
 RUN make build
-RUN make localtestnet-example-config
+RUN make localtestnet-config
 RUN echo "completed testnet config"
 
 # Final image

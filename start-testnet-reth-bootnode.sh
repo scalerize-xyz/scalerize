@@ -9,8 +9,12 @@ reth node \
     --chain $ETH_GENESIS_PATH \
     --http \
     --http.addr '0.0.0.0' \
-    --discovery.port 30303 \
     --http.api admin,debug,eth,net,trace,txpool,web3,rpc,reth,ots \
     --authrpc.addr '0.0.0.0' \
     --authrpc.jwtsecret $JWT_PATH \
     --datadir $ETH_DATA_DIR \
+    --rpc.eth-proof-window 1209600 \
+    --ws \
+    --ws.addr '0.0.0.0' \
+    --ws.port 8545 \
+    --ws.api admin,debug,eth,net,trace,txpool,web3,rpc,reth,ots

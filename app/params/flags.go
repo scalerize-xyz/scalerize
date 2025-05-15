@@ -8,6 +8,7 @@ var (
 	FlagRPCJWTRefreshInterval        = "jwt-refresh-interval"
 	FlagRPCCheckInterval             = "eth-rpc-check-interval"
 	FlagEthChainID                   = "eth-chain-id"
-	FlagSocketPath                   = "socket-path"
+	FlagDBSocketPath                 = "db-socket-path"
+	FlagStateSocketPath              = "state-socket-path"
 	FlagCometBFTRPCAddress           = "cometbft-rpc-addr"
 )

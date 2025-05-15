@@ -3,3 +3,4 @@ debug_container.log
 .scalerized
 example-testnet
 build
+*.env

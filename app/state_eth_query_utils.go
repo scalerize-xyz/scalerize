@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/holiman/uint256"
 )
 
 // AccountResult is the result of a GetProof operation.
@@ -29,7 +31,7 @@ type AccountResult struct {
 // StorageResult provides a proof for a key-value pair.
 type StorageResult struct {
 	Key   string       `json:"key"`
-	Value *hexutil.Big `json:"value"`
+	Value *uint256.Int `json:"value"`
 	Proof []string     `json:"proof"`
 }
 
@@ -67,14 +69,14 @@ func createCosmosClient(cometBFTClient *http.HTTP) (cosmossdkclient.Context, err
 // in our case we will get the storage slot directly and
 // will populate key in StorageResult, balance, codeHash and none in AccountResult on reth side
 // need to send the bincode serialized hashed address and hashed storageKeys
-func getProof(cometBFTClient *http.HTTP, serializedHashedAccountAddress []byte, serializedHashedStorageKeys [][]byte, blockNumOrHash *BlockNumberOrHash) (*AccountResult, error) {
+func getProof(cometBFTClient *http.HTTP, serializedHashedAccountAddress []byte, serializedStorageKeys [][]byte, blockNumOrHash *BlockNumberOrHash) (*AccountResult, error) {
 	blockNumber, err := blockNumberFromTendermint(cometBFTClient, *blockNumOrHash)
 	if err != nil {
 		return nil, err
 	}
 
 	// query storage proofs
-	storageProofs := make([]StorageResult, len(serializedHashedStorageKeys))
+	storageProofs := make([]StorageResult, len(serializedStorageKeys))
 
 	cosmosClient, err := createCosmosClient(cometBFTClient)
 	if err != nil {
@@ -83,28 +85,30 @@ func getProof(cometBFTClient *http.HTTP, serializedHashedAccountAddress []byte, 
 
 	cosmosClient = cosmosClient.WithHeight(blockNumber)
 
-	for i, key := range serializedHashedStorageKeys {
-		// hexKey := common.HexToHash(key)
+	for i, key := range serializedStorageKeys {
 		valueBz, proof, err := getProofForKey(cosmosClient, HashedStoragesStoreName, append(serializedHashedAccountAddress, key...))
 		if err != nil {
 			return nil, err
 		}
 
 		storageProofs[i] = StorageResult{
-			Value: (*hexutil.Big)(new(big.Int).SetBytes(valueBz)),
+			Key:   hex.EncodeToString(key[8:]),
+			Value: uint256.NewInt(0).SetBytes(valueBz),
 			Proof: getHexProofs(proof),
 		}
 	}
 
 	// query account proofs
-	// hashedAccountAddress := gethcrypto.Keccak256Hash(address)
 	_, proof, err := getProofForKey(cosmosClient, HashedAccountsStoreName, serializedHashedAccountAddress)
 	if err != nil {
 		return nil, err
 	}
 
 	return &AccountResult{
+		Address:      common.Address{},
 		AccountProof: getHexProofs(proof),
+		Balance:      (new(big.Int).SetBytes(make([]byte, 32))),
+		Nonce:        0,
 		StorageHash:  common.Hash{},
 		StorageProof: storageProofs,
 	}, nil
@@ -161,6 +165,15 @@ func blockNumberFromTendermint(cometbftClient *http.HTTP, blockNrOrHash BlockNum
 		}
 		return block.Block.Height, nil
 	case blockNrOrHash.BlockNumber != nil:
+		if *blockNrOrHash.BlockNumber == -1 {
+			block, err := cometbftClient.Block(context.Background(), nil)
+			if err != nil {
+				return 0, err
+			}
+
+			return block.Block.Height, nil
+		}
+
 		return *blockNrOrHash.BlockNumber, nil
 	default:
 		return 0, nil
